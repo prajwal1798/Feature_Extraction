@@ -1,5 +1,7 @@
 # DeepONet and FNO surrogates for steady heat conduction in a plate with a cavity
 
+![Plate with a cooled cavity: geometry, finite element mesh, signed-distance input and temperature output, with six further cases of the dataset](docs/figures/banner.png)
+
 This repository compares two neural operators that learn the map from cavity geometry to temperature field:
 
 - the **DeepONet** of Lu et al. (2021)
@@ -64,7 +66,6 @@ Both operators are trained at N = 200, 400, 800, 1600 and 3200, with five seeds 
 | `jobs/slurm/` | `gpu.sh` and `cpu.sh`: one generic Slurm job each |
 | `tests/` | numerical regression tests (`python tests/run_all.py`) |
 | `docs/manual/` | **the step-by-step instructions** (see "Documentation" below) |
-| `docs/development/` | audit, change log and verification record of the code |
 | `archive/` | earlier scripts (POD-DeepONet, depth study, old figures); not used, not runnable as is |
 
 The code creates two more folders:
@@ -105,7 +106,7 @@ bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
 source ~/miniforge3/etc/profile.d/conda.sh
 
 # the project
-git clone https://github.com/OWNER/REPO.git ML
+git clone https://github.com/prajwal1798/Feature_Extraction.git ML
 cd ML
 
 # a separate environment for it
@@ -114,7 +115,7 @@ conda activate opl
 python -m pip install -r requirements.txt
 ```
 
-`OWNER/REPO` is the address of this repository. On Linux, `pip install torch` installs the CUDA build. On macOS, use `--device cpu` (see section 2).
+On Linux, `pip install torch` installs the CUDA build. On macOS, use `--device cpu` (see section 2).
 
 ### Windows with an NVIDIA GPU
 
@@ -308,4 +309,4 @@ Stopping and continuing:
 
 ## Citation and licence
 
-If you use this code, please cite the accompanying publication (to be added). The licence is in `LICENSE`.
+If you use this code, please cite the accompanying publication (to be added). The code is released under the GNU General Public License v3.0 (`LICENSE`).
