@@ -1,0 +1,362 @@
+rem // ==========================================================================
+rem // COMMANDS FOR YOUR COMPUTER (Windows tower, NVIDIA GPU), IN THE ORDER OF USE
+rem //
+rem // Type these in "Anaconda Prompt (miniconda3)" from the Start menu.
+rem // Copy one line, or a whole block. Lines starting with "rem" are notes:
+rem // Windows reads them and does nothing, so pasting them is harmless.
+rem //
+rem // Pattern of every project command:
+rem //     python run.py  STAGE  --option value  --option value
+rem //     STAGE  = what to do (generate, train, evaluate, plot, ...)
+rem //     --...  = how to do it; every option starts with TWO hyphens and is
+rem //              separated from the next word by ONE space.
+rem //
+rem // PART A  set up the computer (once)                         blocks  1 - 6
+rem // PART B  THE FULL STUDY, step by step                       blocks  7 - 12
+rem // PART C  the earlier 500-case study                        blocks 13 - 15
+rem // PART D  stopping, results, Sunbird                         blocks 16 - 18
+rem //
+rem // WHERE TO SEE THINGS
+rem //   Live output : on this computer it appears in this window as it runs
+rem //                 (one line per solved case, one line every 20 epochs).
+rem //                 Closing the window or Ctrl+C stops the command.
+rem //   Results     : never in the window; they are files under the project:
+rem //     data\processed\TAG\protocol_v2\dataset.npz      the dataset
+rem //     outputs\checkpoints\TAG\RUN\best_model.pt       a trained model
+rem //     outputs\logs\TAG\RUN\loss_history.csv           its loss curve
+rem //     outputs\study_results\TAG\RUN\                  its test errors
+rem //     outputs\study_results\TAG\tuning\               tuning tables, winners
+rem //     outputs\figures\TAG\RUN\                        figures of one run
+rem //     outputs\figures\TAG\report\                     heatmaps, comparison,
+rem //                                                     scaling.pdf
+rem //   TAG = scaling_3200 (full study) or combined_0500 (500-case study),
+rem //   RUN = the run name. Each block below also says where its results go.
+rem //   "explorer outputs" (block 17) opens the folder.
+rem // ==========================================================================
+
+
+rem ##########################################################################
+rem #  PART A   SET UP THE COMPUTER (ONCE)
+rem ##########################################################################
+
+
+rem // ==========================================================================
+rem // 1. NVIDIA DRIVER
+rem //
+rem // Shows your graphics card and the newest CUDA version its driver supports
+rem // ("CUDA Version" in the top-right corner). PyTorch brings its own CUDA,
+rem // so only the driver matters; the CUDA Toolkit is NOT needed.
+rem // If the command is unknown or the version is below 12.6: install the
+rem // newest driver from nvidia.com, restart, run it again.
+rem // ==========================================================================
+nvidia-smi
+
+
+rem // ==========================================================================
+rem // 2. PYTHON ENVIRONMENT
+rem //
+rem // conda create : makes a separate Python 3.11 called "opl", so this project
+rem //                never disturbs any other Python on the computer.
+rem //   -n opl                    name of the environment
+rem //   -y                        answer "yes" to the confirmation question
+rem //   --override-channels -c conda-forge
+rem //                             take packages only from the free conda-forge
+rem //                             channel (avoids the Terms-of-Service error)
+rem // conda activate : switch this window into "opl"; the prompt shows (opl).
+rem // pip install    : numpy (arrays), matplotlib (figures),
+rem //                  ngsolve (finite element solver, includes netgen mesher).
+rem // ==========================================================================
+conda create -n opl python=3.11 -y --override-channels -c conda-forge
+conda activate opl
+pip install numpy matplotlib ngsolve
+
+
+rem // ==========================================================================
+rem // 3. PYTORCH WITH GPU
+rem //
+rem // A plain "pip install torch" gives the CPU-only version on Windows.
+rem // uninstall : removes that CPU version if it was installed earlier.
+rem // install   : --index-url points pip to the PyTorch build made for CUDA 13.0
+rem //             (cu130). If nvidia-smi shows CUDA 12.6 to 12.9, write cu126.
+rem // ==========================================================================
+pip uninstall -y torch
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+
+
+rem // ==========================================================================
+rem // 4. CHECK THE GPU
+rem //
+rem // Line 1 prints the PyTorch version (must end in +cu130) and True if the
+rem //        GPU can be used. False = CPU version or driver too old.
+rem // Line 2 prints the name of the graphics card.
+rem // ==========================================================================
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+python -c "import torch; print(torch.cuda.get_device_name(0))"
+
+
+rem // ==========================================================================
+rem // 5. GET AND CHECK THE PROJECT
+rem //
+rem // Download it ONE of two ways:
+rem //   a) git (Git for Windows, git-scm.com):
+rem //        git clone https://github.com/prajwal1798/Feature_Extraction.git C:\ML
+rem //   b) GitHub page: Code -> Download ZIP; extract it and rename the
+rem //      extracted folder to C:\ML (run.py must be directly inside C:\ML)
+rem //
+rem // cd /d     : go to the project folder (/d also changes the drive letter).
+rem //             Every project command must be typed inside this folder.
+rem // run_all   : numerical self-tests (geometry, solver, split, Halton, models);
+rem //             about one minute; must end with "All tests passed".
+rem // smoke     : runs every stage on 20 tiny cases on the GPU (a few minutes);
+rem //             must end with "Smoke test passed". Its files go to the
+rem //             folder "verification", which can be deleted afterwards.
+rem // ==========================================================================
+cd /d C:\ML
+python tests\run_all.py
+python run.py smoke
+
+
+rem // ==========================================================================
+rem // 6. EVERY NEW WINDOW
+rem //
+rem // A new window starts in "base" and in your user folder; these two lines
+rem // bring you back into the project environment and folder.
+rem // ==========================================================================
+conda activate opl
+cd /d C:\ML
+
+
+rem ##########################################################################
+rem #  PART B   THE FULL STUDY, STEP BY STEP
+rem #
+rem #  One dataset ("scaling", 3800 FE cases) serves the whole study:
+rem #    3200 TRAINING cases from the Halton sequence, in Halton order;
+rem #         the training set of size N is the first N of them
+rem #         (N = 200, 400, 800, 1600, 3200; each set lies inside the next)
+rem #     200 VALIDATION cases  - the same for every N (early stopping, tuning)
+rem #     400 TEST cases        - the same for every N (final errors only)
+rem #  "Scaling" = how the test error scales with the number of training
+rem #  cases N; expected  error = C N^(-alpha)  (a straight line on log-log axes).
+rem #  Every command of Part B carries  --family scaling  (or sets it itself).
+rem ##########################################################################
+
+
+rem // ==========================================================================
+rem // 7. DATA  (CPU, NGSolve; if a command stops, type it again: it continues)
+rem //
+rem // generate         : solves the 3800 cases and writes the dataset
+rem // generate-rounded : 50 rounded-rectangle cavities, a shape never used in
+rem //                    training (extra generalisation test), scaled with the
+rem //                    temperature range of the training pool
+rem // plot-sampling    : figure of where the cavities lie and their sizes
+rem // preview          : one FE case drawn: geometry, mesh, FE field, SDF, mask
+rem // mesh-check       : FE accuracy on three meshes + heat balance (table)
+rem // ==========================================================================
+python run.py generate --family scaling
+python run.py generate-rounded --family scaling --rounded-cases 50
+python run.py plot-sampling --family scaling
+python run.py preview
+python run.py mesh-check
+rem // results: data\processed\scaling_3200\protocol_v2\dataset.npz
+rem //          outputs\figures\scaling_3200\dataset\   (plot-sampling)
+rem //          outputs\study_results\combined_0500\preview\ and \mesh_convergence\
+
+
+rem // ==========================================================================
+rem // 8. QUICK TRY OF ONE MODEL  (optional; checks that training works)
+rem //
+rem //   --train-size 800   train on the first 800 training cases
+rem //   --operator fno     which network: fno or deeponet
+rem //   --seed 321         random seed (initial weights, order of the batches)
+rem //   --run-name ...     name of this run; all its files carry this name
+rem //   --epochs 300       short run (the study uses 5000 + early stopping)
+rem // One line is printed every 20 epochs; RMSE is the validation error in K.
+rem // ==========================================================================
+python run.py train    --family scaling --train-size 800 --operator fno --seed 321 --run-name try_fno --epochs 300
+python run.py evaluate --family scaling --operator fno --run-name try_fno
+python run.py plot     --family scaling --operator fno --run-name try_fno
+rem // results: outputs\logs\scaling_3200\try_fno\         loss history
+rem //          outputs\study_results\scaling_3200\try_fno\ test errors
+rem //          outputs\figures\scaling_3200\try_fno\       figures
+
+
+rem // ==========================================================================
+rem // 9. TUNING AT N = 800  (validation cases only; the test cases are not used)
+rem //
+rem // tune        : trains every model of one stage, one after another, on the
+rem //               first 800 training cases; scores each on the validation set
+rem // tune-select : picks the model with the smallest validation error and
+rem //               draws the heatmap -> outputs\figures\scaling_3200\report\N0800\
+rem // DeepONet : grid = 5 depths x 5 widths, tanh (25 models)
+rem //            grid_gelu = the same 25 with GELU
+rem //            lr = 3 learning rates at the better of the two grid winners
+rem // FNO      : modes_width = 4 x 3 (12), depth = 4 (4), lr = 3 learning rates
+rem // Each stage starts from the winner of the previous one: keep the order.
+rem // --epochs 2000 gives every tuning model the same budget (fair comparison).
+rem // If "tune" stops, type it again: finished models are skipped.
+rem // ==========================================================================
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name grid --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name grid
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name grid_gelu --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name grid_gelu
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name lr --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name lr
+
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name modes_width --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name modes_width
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name depth --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name depth
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name lr --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name lr
+
+
+rem // ==========================================================================
+rem // 10. THE DATA-SIZE RUNS  (5 sizes x 5 seeds = 25 runs per operator)
+rem //
+rem // train-scaling : for N = 200, 400, 800, 1600, 3200 and seeds 321, 777, 2026, 31415, 27182
+rem //                 trains the tuned model on the first N training cases,
+rem //                 then scores it on the 400 test cases.
+rem //                 Runs are named scale_fno_N0800_seed321, ...
+rem //                 Every run: 5000 epochs at most, early stopping after 800
+rem //                 epochs without improvement on the validation set.
+rem //                 Typing the command again skips finished runs.
+rem // ==========================================================================
+python run.py train-scaling --operator deeponet
+python run.py train-scaling --operator fno
+rem // results: outputs\study_results\scaling_3200\scale_fno_N0800_seed321\ ...
+rem //          (one folder per run; the window prints which run is training)
+
+
+rem // ==========================================================================
+rem // 11. RESULTS OF THE STUDY
+rem //
+rem // scaling-report : test error against N on log-log axes, with the fitted
+rem //                  rate alpha of every operator
+rem //                  -> outputs\figures\scaling_3200\report\scaling.pdf
+rem // compare        : the full DeepONet-FNO report at ONE size N (learning
+rem //                  curves, test error over seeds, case errors, error per
+rem //                  shape, case-by-case scatter), here for every N
+rem //                  -> outputs\figures\scaling_3200\report\N0200\ ... \N3200\
+rem // for %n in (...) : repeats the command for every size %n
+rem // ==========================================================================
+python run.py scaling-report
+for %n in (200 400 800 1600 3200) do python run.py compare --family scaling --train-size %n
+
+
+rem // ==========================================================================
+rem // 12. FIGURES AND TIMINGS OF SINGLE RUNS  (example: N = 3200, seed 321)
+rem //
+rem // plot             : loss curve + one test case (FE, prediction, error);
+rem //                    --test-case 7 for another case (0 ... 399)
+rem // evaluate-rounded : errors on the 50 rounded rectangles
+rem // benchmark        : seconds per training epoch and per prediction
+rem // The last line plots every one of the 400 test cases of one run.
+rem // ==========================================================================
+python run.py plot             --family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py evaluate-rounded --family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py benchmark        --family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py plot             --family scaling --operator deeponet --run-name scale_deeponet_N3200_seed321
+python run.py evaluate-rounded --family scaling --operator deeponet --run-name scale_deeponet_N3200_seed321
+python run.py benchmark        --family scaling --operator deeponet --run-name scale_deeponet_N3200_seed321
+for /L %i in (0,1,399) do python run.py plot --family scaling --operator fno --run-name scale_fno_N3200_seed321 --test-case %i
+rem // results: outputs\figures\scaling_3200\scale_fno_N3200_seed321\
+rem //          outputs\study_results\scaling_3200\scale_fno_N3200_seed321\benchmarks\
+
+
+rem ##########################################################################
+rem #  PART C   THE EARLIER 500-CASE STUDY
+rem #
+rem #  Latin hypercube, 500 cases, split 400 / 50 / 50. No --family option: "combined" with 500 cases is the
+rem #  default. Kept to reproduce and extend the earlier results.
+rem ##########################################################################
+
+
+rem // ==========================================================================
+rem // 13. THE 500-CASE DATASET
+rem //
+rem // EITHER compute it here (same code and seed as before = same 500 cases):
+rem //     python run.py generate --cases 500
+rem // OR, after it was made on Sunbird, copy it (VPN when off campus):
+rem // set ...  : short names for the Sunbird address and the dataset folder
+rem // mkdir    : creates the same folder here
+rem // scp      : copies; asks for the Sunbird password (nothing shown while
+rem //            typing), then shows a progress bar
+rem // ==========================================================================
+set SUNBIRD=USERNAME@LOGIN_NODE:/scratch/USERNAME/ML
+set DATA=data/processed/combined_0500/protocol_v2
+mkdir data\processed\combined_0500\protocol_v2
+scp %SUNBIRD%/%DATA%/dataset.npz %DATA%/
+scp %SUNBIRD%/%DATA%/dataset_manifest.json %DATA%/
+python run.py generate-rounded --rounded-cases 50
+
+
+rem // ==========================================================================
+rem // 14. TUNING ON THE 500-CASE DATASET  (same stages as block 9)
+rem // ==========================================================================
+python run.py tune        --operator deeponet --stage-name grid --epochs 2000
+python run.py tune-select --operator deeponet --stage-name grid
+python run.py tune        --operator deeponet --stage-name grid_gelu --epochs 2000
+python run.py tune-select --operator deeponet --stage-name grid_gelu
+python run.py tune        --operator deeponet --stage-name lr --epochs 2000
+python run.py tune-select --operator deeponet --stage-name lr
+python run.py tune        --operator fno --stage-name modes_width --epochs 2000
+python run.py tune-select --operator fno --stage-name modes_width
+python run.py tune        --operator fno --stage-name depth --epochs 2000
+python run.py tune-select --operator fno --stage-name depth
+python run.py tune        --operator fno --stage-name lr --epochs 2000
+python run.py tune-select --operator fno --stage-name lr
+
+
+rem // ==========================================================================
+rem // 15. FINAL MODELS (5 SEEDS), TEST, TIMING AND REPORT
+rem //
+rem // set S=...           : the five seeds, used as %S%
+rem // for %s in (%S%) do  : repeats the command once for every seed %s
+rem // train-final         : trains the winner of the last tuning stage;
+rem //                       runs are named final_deeponet_seed321, ...
+rem // compare             : report -> outputs\figures\combined_0500\report\
+rem // ==========================================================================
+set S=321 777 2026 31415 27182
+for %s in (%S%) do python run.py train-final --operator deeponet --seed %s
+for %s in (%S%) do python run.py train-final --operator fno --seed %s
+for %s in (%S%) do python run.py evaluate --operator deeponet --run-name final_deeponet_seed%s
+for %s in (%S%) do python run.py evaluate --operator fno --run-name final_fno_seed%s
+for %s in (%S%) do python run.py benchmark --operator deeponet --run-name final_deeponet_seed%s
+for %s in (%S%) do python run.py benchmark --operator fno --run-name final_fno_seed%s
+python run.py compare
+
+
+rem ##########################################################################
+rem #  PART D   STOPPING, RESULTS, SUNBIRD
+rem ##########################################################################
+
+
+rem // ==========================================================================
+rem // 16. STOPPED IN THE MIDDLE?
+rem //
+rem // Ctrl+C stops any command. A recovery point is saved every 50 epochs.
+rem // train / train-final : type the same line again and add --resume
+rem // tune, train-scaling, generate : type the same line again (nothing to add)
+rem // ==========================================================================
+python run.py train --family scaling --train-size 800 --operator fno --seed 321 --run-name try_fno --epochs 300 --resume
+
+
+rem // ==========================================================================
+rem // 17. LOOK AT THE RESULTS
+rem //
+rem // Opens the outputs folder in Windows Explorer.
+rem // Figures are PDF (thesis) and PNG (slides); numbers are CSV and JSON.
+rem // ==========================================================================
+explorer outputs
+
+
+rem // ==========================================================================
+rem // 18. THE CLUSTER (SUNBIRD) FROM THIS COMPUTER  (VPN when off campus)
+rem //
+rem // USERNAME / LOGIN_NODE: your cluster user name and login address
+rem // ssh ...                       : log in (then commands_slurm.txt;
+rem //                                 "exit" logs out)
+rem // scp -r ... outputs .          : download all Sunbird results to "here"
+rem // ==========================================================================
+ssh USERNAME@LOGIN_NODE
+scp -r USERNAME@LOGIN_NODE:/scratch/USERNAME/ML/outputs .

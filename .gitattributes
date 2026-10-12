@@ -1,0 +1,6 @@
+# Line endings: job files must keep Linux endings (bash fails on Windows ones),
+# the Windows command file keeps Windows endings (clean in Notepad).
+*.sh                                text eol=lf
+*.py                                text eol=lf
+docs/manual/commands_slurm.txt      text eol=lf
+docs/manual/commands_windows.txt    text eol=crlf

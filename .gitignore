@@ -1,0 +1,36 @@
+# =============================================================================
+# FILES THAT ARE MADE BY THE CODE OR BY THE MACHINE, NOT PART OF THE PROJECT
+# =============================================================================
+
+# Python environment created inside the project folder (cluster set-up)
+env/
+
+# Datasets, results and the smoke-test folder (made by run.py)
+data/
+outputs/*
+!outputs/slurm/
+outputs/slurm/*
+!outputs/slurm/.gitkeep
+verification/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Trained weights and arrays, wherever they are
+*.pt
+*.npz
+
+# LaTeX build files (docs/manual)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+docs/manual/*.pdf
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

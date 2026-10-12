@@ -1,0 +1,1074 @@
+% =============================================================================
+% OPERATOR LEARNING PROJECT: HOW TO RUN THE CODE ON A PC AND ON SUNBIRD
+% Compile with pdflatex (twice, for the table of contents).
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=24mm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage[hidelinks]{hyperref}
+
+% COPY-PASTE SAFETY: put real space characters into the PDF, so that text copied
+% from a PDF viewer keeps its spaces, and map every glyph to its plain character
+\input{glyphtounicode}
+\pdfgentounicode=1
+\ifdefined\pdfinterwordspaceon \pdfinterwordspaceon \fi
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlist{itemsep=2pt,topsep=2pt}
+\titleformat{\part}[display]{\Large\bfseries\centering}{Part \thepart}{4pt}{}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.8em}{}
+
+% INLINE CODE: typed exactly as shown (keeps -- as two hyphens)
+\lstset{basicstyle=\ttfamily, columns=fullflexible, keepspaces=true, upquote=true,
+        breaklines=true, breakatwhitespace=false, prebreak={}, postbreak={}}
+\newcommand{\code}[1]{\lstinline{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% COMMAND BOXES: copy the text inside exactly as it is
+\lstnewenvironment{cmd}[1][]{%
+  \lstset{basicstyle=\ttfamily\footnotesize, columns=fullflexible, keepspaces=true,
+          upquote=true, showstringspaces=false, breaklines=false,
+          frame=single, rulecolor=\color{black!60}, backgroundcolor=\color{black!4},
+          xleftmargin=4pt, xrightmargin=4pt, framesep=5pt, aboveskip=6pt, belowskip=6pt,
+          title={\footnotesize\sffamily #1}}}{}
+
+% A FRAMED NOTE
+\newcommand{\note}[1]{\par\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\small #1}}\par}
+
+\begin{document}
+
+% -----------------------------------------------------------------------------
+\begin{center}
+  {\LARGE\bfseries Operator Learning Project}\\[4pt]
+  {\large Running the code on your own computer and on Sunbird}\\[8pt]
+  {\small DeepONet and FNO for steady heat conduction \quad$\cdot$\quad October 2026}
+\end{center}
+
+\vspace{2pt}
+\tableofcontents
+\vspace{10pt}
+
+% =============================================================================
+\section{The one idea}
+% =============================================================================
+
+Everything is done by one program, \code{run.py}. You give it a \emph{stage} (what to do)
+and a few \emph{options} (how to do it). The same words work on every machine:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Where & What you type \\
+\midrule
+Your computer      & \code{python run.py  STAGE  OPTIONS} \\
+Sunbird, GPU node  & \code{sbatch jobs/slurm/gpu.sh  STAGE  OPTIONS} \\
+Sunbird, CPU node  & \code{sbatch jobs/slurm/cpu.sh  STAGE  OPTIONS} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Example, training an FNO with seed 321:
+
+\begin{cmd}[Your computer]
+python run.py train --operator fno --seed 321
+\end{cmd}
+\begin{cmd}[Sunbird]
+sbatch jobs/slurm/gpu.sh train --operator fno --seed 321
+\end{cmd}
+
+\note{\textbf{Copying commands.} Every command of this manual is also in the plain-text files
+\code{docs/manual/commands_windows.txt} and \code{docs/manual/commands_slurm.txt}.
+Open them in Notepad and copy from there: plain text never loses a space.}
+
+\note{\textbf{Spaces matter.} Every word is separated by one space, and every option starts
+with two hyphens: \code{smoke --device cpu}, never \code{smoke--device cpu}.
+If the computer answers \code{invalid choice}, look for a missing space.}
+
+See Section~\ref{sec:order} for the whole study in the order you run it.
+
+\textbf{Where things are.} Everything is inside the project folder (the folder that contains
+\code{run.py}). The code creates two folders: \code{data/} for the dataset and
+\code{outputs/} for every result. A \emph{run} is one trained model with one name, for example
+\code{final_fno_seed321}. Its results are:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Folder & Contents \\
+\midrule
+\code{outputs/checkpoints/combined_0500/RUN/}   & trained weights \code{best_model.pt} \\
+\code{outputs/logs/combined_0500/RUN/}          & loss history, training summary \\
+\code{outputs/study_results/combined_0500/RUN/} & error tables (validation, test) \\
+\code{outputs/figures/combined_0500/RUN/}       & figures of this run \\
+\midrule
+\code{outputs/figures/combined_0500/report/}    & tuning heatmaps and DeepONet--FNO comparison \\
+\code{outputs/figures/combined_0500/dataset/}   & where the cavities lie \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\code{combined_0500} is the earlier dataset of 500 cases (circles and rectangles). The runs of the
+full study (Section~\ref{sec:order}) are in the same folders under \code{scaling_3200} instead.
+
+% =============================================================================
+\section{The full study, in order}\label{sec:order}
+% =============================================================================
+
+\textbf{The question.} How accurate are DeepONet and FNO, and how does each improve when it is
+given more training data? The study therefore has a hyperparameter of its own: the number of
+training cases $N \in \{200, 400, 800, 1600, 3200\}$.
+
+\textbf{What ``scaling'' means.} It is the usual name for \emph{how the test error scales with
+$N$}. For a well-behaved model the error falls like a power of $N$,
+\[
+  e(N) = C\,N^{-\alpha}
+  \qquad\Longleftrightarrow\qquad
+  \log e = \log C - \alpha \log N ,
+\]
+a straight line on log--log axes. The slope $\alpha$ is the \emph{rate}: doubling the data
+multiplies the error by $2^{-\alpha}$ (for $\alpha = 0.5$, by 0.71; for $\alpha = 1$, by 0.5).
+A model with the larger $\alpha$ profits more from data; a curve that bends flat means the model
+has stopped learning from data (its capacity, not the data, is the limit).
+
+\textbf{One dataset for every $N$} (\code{scaling_3200}, 3800 FE solves):
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule
+Part & Cases & Role \\
+\midrule
+training pool & 3200 & Halton sequence, alternating circle/rectangle. The training set of size $N$
+                        is the first $N$ cases: each set lies inside the next and is evenly spread. \\
+validation    & 200  & Latin hypercube. \textbf{The same 200 cases for every $N$ and every seed.}
+                        Used for early stopping, the learning-rate schedule and tuning. \\
+test          & 400  & Latin hypercube. \textbf{The same 400 cases for every $N$ and every seed.}
+                        Used only for the final errors. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Keeping validation and test fixed is essential: every point of the curve is then measured on
+identical cases, so a change of error is caused by $N$ alone. The temperature scale is taken from
+the whole training pool, so it is also the same for every $N$.
+
+\textbf{Every run is trained the same way:} at most 5000 epochs, early stopping after 800 epochs
+without a better validation error, learning rate halved after 200 such epochs, batch size 8, the
+tuned architecture. Each $N$ is trained with five seeds (321, 777, 2026, 31415, 27182): 25 runs per
+operator, 50 in total. The seeds give the spread (error bars) of each point.
+
+\textbf{The order.} Each step needs the results of the one before.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clYl@{}}
+\toprule
+Step & Stage & What happens & Section \\
+\midrule
+1 & \code{generate}, \code{generate-rounded} & FE solves: the 3800 cases, and 50 rounded rectangles
+                                               (a shape never trained on) & \ref{sec:pcdata} \\
+2 & \code{plot-sampling}, \code{preview}, \code{mesh-check} & check the data: where the cavities lie,
+                                               one case drawn, FE accuracy & \ref{sec:pcdata} \\
+3 & \code{train} (short) & optional: one quick model, to see that training works & \ref{sec:pcone} \\
+4 & \code{tune}, \code{tune-select} & choose each operator's architecture and learning rate at
+                                               $N = 800$, on the validation cases only & \ref{sec:pctune} \\
+5 & \code{train-scaling} & the 25 runs per operator, each scored on the test cases & \ref{sec:pcscaling} \\
+6 & \code{scaling-report} & error against $N$, fitted $\alpha$ & \ref{sec:pcscaling} \\
+7 & \code{compare} & full DeepONet--FNO report at each $N$ & \ref{sec:pcscaling} \\
+8 & \code{plot}, \code{evaluate-rounded}, \code{benchmark} & figures, rounded-rectangle errors and
+                                               timings of chosen runs & \ref{sec:pcscaling} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Why tune at $N = 800$: tuning at every $N$ would cost five times as much. 800 is in the middle of
+the range (on log axes), so the chosen architecture is not tailored to the smallest or the largest
+set. Every $N$ then uses the same architecture, so only $N$ changes along the curve.
+
+\textbf{The earlier 500-case study} (\code{combined_0500}: one Latin-hypercube dataset, split
+400/50/50) uses the same stages without \code{--family scaling}: tuning, then \code{train-final}
+with five seeds, then \code{compare}. It is kept to reproduce the earlier results and is not needed
+for the full study.
+
+\textbf{What you can change.} Everything has a default; you type an option only to change it.
+Section~\ref{sec:options} lists every option of \code{run.py}, and
+Section~\ref{sec:settings} the settings that are fixed in \code{src/config.py} (physics, geometry
+ranges, grid). Options needed for the full study are few: \code{--family scaling},
+\code{--operator}, \code{--stage-name}, \code{--train-size 800} for tuning, and
+\code{--epochs 2000} for tuning.
+
+% =============================================================================
+\part{Your own computer (Windows, NVIDIA GPU)}
+% =============================================================================
+
+Do Sections~\ref{sec:driver}--\ref{sec:project} once. After that, every session starts with
+the two lines of Section~\ref{sec:everyday}.
+
+% =============================================================================
+\section{NVIDIA driver}\label{sec:driver}
+% =============================================================================
+
+PyTorch brings its own copy of CUDA. You do \textbf{not} install the CUDA Toolkit;
+you only need a recent NVIDIA \emph{driver}.
+
+\begin{enumerate}
+  \item Press the Windows key, type \code{cmd}, press Enter. Type:
+\begin{cmd}[Command Prompt]
+nvidia-smi
+\end{cmd}
+  \item A table appears with the name of your graphics card. In its top-right corner it shows
+        \code{CUDA Version: 13.0} (or another number). Write this number down.
+  \item If the command is not found, or the number is below 12.6, install the newest driver:
+        go to \href{https://www.nvidia.com/Download/index.aspx}{nvidia.com/Download}, choose your
+        card, download, run the installer with the default options, restart the computer, and
+        repeat step~1.
+\end{enumerate}
+
+% =============================================================================
+\section{Miniconda}\label{sec:conda}
+% =============================================================================
+
+Miniconda gives you Python in separate, clean \emph{environments}.
+
+\begin{enumerate}
+  \item Download \emph{Miniconda3 Windows 64-bit} from
+        \href{https://www.anaconda.com/download/success}{anaconda.com/download/success}
+        (section \emph{Miniconda Installers}).
+  \item Run the installer with these choices:
+        \emph{Just Me}; keep the suggested folder
+        (\texttt{miniconda3} in your user folder); leave \emph{Add to PATH} unticked. Finish.
+  \item Open the Start menu and start \textbf{Anaconda Prompt (miniconda3)}.
+        Every command in Part~I is typed in this window. Its prompt starts with \code{(base)}.
+\end{enumerate}
+
+% =============================================================================
+\section{Python environment}\label{sec:env}
+% =============================================================================
+
+Create an environment called \code{opl}. The options \code{--override-channels -c conda-forge}
+take Python from the free conda-forge channel and avoid the error
+\emph{Terms of Service have not been accepted}.
+
+\begin{cmd}[Anaconda Prompt]
+conda create -n opl python=3.11 -y --override-channels -c conda-forge
+conda activate opl
+pip install numpy matplotlib ngsolve
+\end{cmd}
+
+The prompt now starts with \code{(opl)}.
+
+\textbf{PyTorch with GPU.} Use the box that matches the CUDA Version you wrote down in
+Section~\ref{sec:driver}:
+
+\begin{cmd}[nvidia-smi shows CUDA Version 13.0 or higher]
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+\end{cmd}
+\begin{cmd}[nvidia-smi shows CUDA Version 12.6 to 12.9]
+pip install torch --index-url https://download.pytorch.org/whl/cu126
+\end{cmd}
+
+If PyTorch was installed earlier with a plain \code{pip install torch}, it is the CPU version.
+Remove it first:
+
+\begin{cmd}[Anaconda Prompt]
+pip uninstall -y torch
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+\end{cmd}
+
+\textbf{Check the GPU.}
+
+\begin{cmd}[Anaconda Prompt]
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+python -c "import torch; print(torch.cuda.get_device_name(0))"
+\end{cmd}
+
+The first line must end with \code{True} and the version with \code{+cu130} (or \code{+cu126});
+the second prints the name of your card. If it prints \code{False}, the CPU version is
+installed or the driver is too old: repeat this section.
+The exact command for other cases is on
+\href{https://pytorch.org/get-started/locally/}{pytorch.org/get-started/locally}
+(choose Stable, Windows, Pip, Python, CUDA).
+
+% =============================================================================
+\section{The project}\label{sec:project}
+% =============================================================================
+
+Download the project into \texttt{C:\textbackslash ML}, either with git (Git for Windows,
+\code{git-scm.com}):
+
+\begin{cmd}[Anaconda Prompt]
+git clone https://github.com/prajwal1798/Feature_Extraction.git C:\ML
+\end{cmd}
+
+or from the GitHub page (\emph{Code}, \emph{Download ZIP}): extract it and rename the folder to
+\texttt{C:\textbackslash ML}, so that \code{run.py} lies directly inside it. Then:
+
+\begin{cmd}[Anaconda Prompt]
+cd /d C:\ML
+python tests\run_all.py
+python run.py smoke
+\end{cmd}
+
+\code{run_all.py} checks the numerics (about one minute) and ends with \emph{All tests passed}.
+\code{smoke} runs every stage on 20 tiny cases on your GPU (a few minutes) and ends with
+\emph{Smoke test passed}. It checks that everything runs, not the accuracy. Its results go to
+the folder \code{verification}, which you may delete afterwards.
+
+% =============================================================================
+\section{Every new session}\label{sec:everyday}
+% =============================================================================
+
+Open \textbf{Anaconda Prompt (miniconda3)} and type:
+
+\begin{cmd}[Anaconda Prompt]
+conda activate opl
+cd /d C:\ML
+\end{cmd}
+
+Then type the commands of the following sections. To look at results, open the folder in
+Explorer with \code{explorer outputs}. Figures are PDF (for the thesis) and PNG (for slides).
+
+\note{\textbf{Long runs.} A training run takes hours. Keep the window open, and set Windows
+\emph{Settings > System > Power > Sleep} to \emph{Never} while it runs.
+\code{Ctrl+C} stops a run; Section~\ref{sec:resume} shows how to continue it.}
+
+% =============================================================================
+\section{Step 1--2: data}\label{sec:pcdata}
+% =============================================================================
+
+The finite element solver runs on the processor. 3800 cases take hours; if the command stops
+(or you close the window), type it again: it continues where it stopped.
+
+\begin{cmd}[Anaconda Prompt]
+python run.py generate --family scaling
+python run.py generate-rounded --family scaling --rounded-cases 50
+\end{cmd}
+
+Then check the data:
+
+\begin{cmd}[Anaconda Prompt]
+python run.py plot-sampling --family scaling
+python run.py preview
+python run.py mesh-check
+\end{cmd}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Stage & What you get \\
+\midrule
+\code{generate}         & \code{data/processed/scaling_3200/protocol_v2/dataset.npz} (all cases, split, scale) \\
+\code{generate-rounded} & 50 rounded rectangles, a shape the networks never see in training \\
+\code{plot-sampling}    & where the cavities lie: \code{outputs/figures/scaling_3200/dataset/} \\
+\code{preview}          & one FE case (geometry, mesh, temperature, SDF) \\
+\code{mesh-check}       & FE error on three meshes and the heat balance (table) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =============================================================================
+\section{Step 3: train, test and plot one model}\label{sec:pcone}
+% =============================================================================
+
+Optional, but a good first try. \code{--train-size 800} uses the first 800 training cases;
+\code{--epochs 300} keeps it short.
+
+\begin{cmd}[Anaconda Prompt]
+set F=--family scaling --operator fno
+python run.py train %F% --train-size 800 --seed 321 --run-name try_fno --epochs 300
+\end{cmd}
+
+(\code{set F=...} stores the common words once; \texttt{\%F\%} pastes them back.)
+The window prints one line every 20 epochs:
+
+\begin{cmd}[What a training line means]
+Epoch   400 | training MSE 1.2e-05 | validation MSE 1.9e-05 | RMSE 0.98 K
+\end{cmd}
+
+RMSE is the validation error in kelvin. Training stops at the epoch limit, or earlier when the
+validation error has not improved for 800 epochs. The weights with the lowest validation error
+are kept. When it has finished:
+
+\begin{cmd}[Anaconda Prompt]
+python run.py evaluate         %F% --run-name try_fno
+python run.py evaluate-rounded %F% --run-name try_fno
+python run.py plot             %F% --run-name try_fno
+python run.py benchmark        %F% --run-name try_fno
+\end{cmd}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Stage & What you get \\
+\midrule
+\code{evaluate}         & test errors: \code{outputs/study_results/scaling_3200/try_fno/all_test_cases_grid_*} \\
+\code{evaluate-rounded} & errors on the rounded rectangles (same folder, subfolder \code{rounded_rect_external_test}) \\
+\code{plot}             & loss curve and the first test case (FE, prediction, error):
+                          \code{outputs/figures/scaling_3200/try_fno/} \\
+\code{benchmark}        & training and prediction times: \code{.../try_fno/benchmarks/} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{Another test case:} add \code{--test-case 7} (the 400 test cases are numbered 0 to 399).
+\textbf{DeepONet:} \code{set F=--family scaling --operator deeponet} and another run name.
+\textbf{Other architectures:} add \code{--variant NAME} to \code{train}:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Operator & Variants (default \code{baseline}) \\
+\midrule
+\code{deeponet} & \code{baseline} (2 hidden layers, tanh), \code{activation_gelu}, \code{depth3},
+                  \code{latent256}, \code{depth4_gelu}, \code{depth6_gelu} \\
+\code{fno}      & \code{baseline} (4 blocks, width 32, modes $12\times16$),
+                  \code{activation_tanh}, \code{depth3}, \code{modes8} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Give every experiment its own \code{--run-name}; the code refuses to overwrite an existing run.
+
+% =============================================================================
+\section{Step 4: tuning at N = 800}\label{sec:pctune}
+% =============================================================================
+
+Tuning trains many models on the first 800 training cases and keeps the one with the smallest
+\emph{validation} error; the test cases are never used. It goes in stages, each starting from the
+winner of the previous one, so keep the order:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llYr@{}}
+\toprule
+Operator & Stage & What changes & Models \\
+\midrule
+DeepONet & \code{grid}        & layers $\{2,4,6,8,10\}$ $\times$ neurons $\{10,20,40,80,160\}$, tanh & 25 \\
+DeepONet & \code{grid_gelu}   & the same 25, GELU                                              & 25 \\
+DeepONet & \code{lr}          & learning rate $\{3\cdot10^{-4},\,10^{-3},\,3\cdot10^{-3}\}$ at the better grid winner & 3 \\
+FNO      & \code{modes_width} & modes $\{4,8,12,16\}$ $\times$ width $\{16,32,64\}$              & 12 \\
+FNO      & \code{depth}       & Fourier blocks $\{2,3,4,6\}$                                   & 4 \\
+FNO      & \code{lr}          & learning rate, as above                                        & 3 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Each stage is two commands: \code{tune} trains all its models one after another (2000 epochs
+each, the same for all), \code{tune-select} picks the winner and draws the heatmap.
+
+\begin{cmd}[Anaconda Prompt: DeepONet]
+set T=--family scaling --train-size 800 --operator deeponet
+python run.py tune        %T% --stage-name grid --epochs 2000
+python run.py tune-select %T% --stage-name grid
+python run.py tune        %T% --stage-name grid_gelu --epochs 2000
+python run.py tune-select %T% --stage-name grid_gelu
+python run.py tune        %T% --stage-name lr --epochs 2000
+python run.py tune-select %T% --stage-name lr
+\end{cmd}
+
+\begin{cmd}[Anaconda Prompt: FNO]
+set T=--family scaling --train-size 800 --operator fno
+python run.py tune        %T% --stage-name modes_width --epochs 2000
+python run.py tune-select %T% --stage-name modes_width
+python run.py tune        %T% --stage-name depth --epochs 2000
+python run.py tune-select %T% --stage-name depth
+python run.py tune        %T% --stage-name lr --epochs 2000
+python run.py tune-select %T% --stage-name lr
+\end{cmd}
+
+If a \code{tune} command is stopped, type it again: finished models are skipped and the
+interrupted one continues. Heatmaps (error in every cell, winner framed in red):
+\code{outputs/figures/scaling_3200/report/N0800/tuning_*.pdf}; numbers:
+\code{outputs/study_results/scaling_3200/tuning/*.csv}.
+
+% =============================================================================
+\section{Steps 5--8: the data-size runs and the results}\label{sec:pcscaling}
+% =============================================================================
+
+\textbf{Step 5.} One command per operator trains every size $N$ with every seed (25 runs), one
+after another, with the winner of the last tuning stage, and scores each run on the 400 test
+cases. Runs are named \code{scale_fno_N0800_seed321} and so on. If stopped, type the same command
+again: finished runs are skipped and an interrupted one continues.
+
+\begin{cmd}[Anaconda Prompt]
+python run.py train-scaling --operator deeponet
+python run.py train-scaling --operator fno
+\end{cmd}
+
+\textbf{Steps 6 and 7.} The learning curves, then the full DeepONet--FNO report at every $N$
+(the \code{for} line repeats the command for every size \texttt{\%n}):
+
+\begin{cmd}[Anaconda Prompt]
+python run.py scaling-report
+for %n in (200 400 800 1600 3200) do python run.py compare --family scaling --train-size %n
+\end{cmd}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Stage & What you get (in \code{outputs/figures/scaling_3200/report/}) \\
+\midrule
+\code{scaling-report} & \code{scaling.pdf}: test error against $N$ on log--log axes, mean and
+                        spread over seeds, fitted line and $\alpha$ for each operator;
+                        numbers in \code{scaling.csv} and \code{scaling_rates.json} \\
+\code{compare}        & \code{N0200/} \ldots\ \code{N3200/}: learning curves, test error over seeds,
+                        case errors, error per shape, DeepONet against FNO case by case \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{Step 8.} Figures, rounded-rectangle errors and timings of single runs, for example
+$N = 3200$, seed 321:
+
+\begin{cmd}[Anaconda Prompt]
+set R=--family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py plot             %R%
+python run.py evaluate-rounded %R%
+python run.py benchmark        %R%
+for /L %i in (0,1,399) do python run.py plot %R% --test-case %i
+\end{cmd}
+
+The last line draws every one of the 400 test cases. For DeepONet, change both \code{fno} to
+\code{deeponet}.
+
+\textbf{Smaller study.} \code{--sizes 200,400,800} and \code{--seeds 321,777} can be added to
+\code{train-scaling}, \code{scaling-report} and \code{compare} (the same lists to all three).
+One single run: \code{train-scaling --operator fno --train-size 400 --seed 321}.
+
+% =============================================================================
+\section{The earlier 500-case study}\label{sec:pcfinal}
+% =============================================================================
+
+This reproduces the earlier results on \code{combined_0500}. Its commands carry no
+\code{--family}: \code{combined} with 500 cases is the default. Compute the dataset (the same
+code and seed as before give the same 500 cases):
+
+\begin{cmd}[Anaconda Prompt]
+python run.py generate --cases 500
+python run.py generate-rounded --rounded-cases 50
+\end{cmd}
+
+or, if it was made on Sunbird, copy it from there (off campus, connect to the university VPN
+first; each \code{scp} asks for your Sunbird password, which is not shown while you type):
+
+\begin{cmd}[Anaconda Prompt]
+set SUNBIRD=USERNAME@LOGIN_NODE:/scratch/USERNAME/ML
+set DATA=data/processed/combined_0500/protocol_v2
+mkdir data\processed\combined_0500\protocol_v2
+scp %SUNBIRD%/%DATA%/dataset.npz %DATA%/
+scp %SUNBIRD%/%DATA%/dataset_manifest.json %DATA%/
+python run.py generate-rounded --rounded-cases 50
+\end{cmd}
+
+Tune with the commands of Section~\ref{sec:pctune}, but with
+\code{set T=--operator deeponet} and \code{set T=--operator fno}. Then train the winner with
+five seeds, test, time, and report:
+
+\begin{cmd}[Anaconda Prompt]
+set S=321 777 2026 31415 27182
+for %s in (%S%) do python run.py train-final --operator deeponet --seed %s
+for %s in (%S%) do python run.py train-final --operator fno --seed %s
+for %s in (%S%) do python run.py evaluate --operator deeponet --run-name final_deeponet_seed%s
+for %s in (%S%) do python run.py evaluate --operator fno --run-name final_fno_seed%s
+for %s in (%S%) do python run.py benchmark --operator deeponet --run-name final_deeponet_seed%s
+for %s in (%S%) do python run.py benchmark --operator fno --run-name final_fno_seed%s
+python run.py compare
+\end{cmd}
+
+The report is in \code{outputs/figures/combined_0500/report/}.
+
+% =============================================================================
+\section{Stopping and continuing}\label{sec:resume}
+% =============================================================================
+
+The code saves a recovery point every 50 epochs.
+\begin{itemize}
+  \item \code{train} and \code{train-final}: type the same command again with \code{--resume}
+        at the end.
+  \item \code{tune}, \code{train-scaling} and \code{generate}: type the same command again.
+\end{itemize}
+Do not change other settings when continuing; the code checks them.
+
+% =============================================================================
+\part{Sunbird}
+% =============================================================================
+
+The commands are those of Part~I, with \code{python run.py} replaced by
+\code{sbatch jobs/slurm/gpu.sh} (networks) or \code{sbatch jobs/slurm/cpu.sh}
+(everything else). Jobs run without you; you only submit and watch.
+
+% =============================================================================
+\section{Set up once}
+% =============================================================================
+
+This part is written for Sunbird (Supercomputing Wales) and works on any Slurm cluster.
+\code{USERNAME} and \code{LOGIN_NODE} stand for your user name and the login address of your
+cluster; if its work disk is not \code{/scratch/\$USER}, use its own path throughout.
+
+\textbf{Log in} from your computer:
+
+\begin{cmd}[Your computer]
+ssh USERNAME@LOGIN_NODE
+\end{cmd}
+
+Everything of the project lives in one folder, \code{/scratch/\$USER/ML}: the code, the Python
+environment (\code{ML/env}), the data (\code{ML/data}) and every result (\code{ML/outputs}).
+Download the project into it:
+
+\begin{cmd}[Cluster]
+cd /scratch/$USER
+git clone https://github.com/prajwal1798/Feature_Extraction.git ML
+cd ML
+mkdir -p outputs/slurm
+\end{cmd}
+
+\textbf{The job files.} Open \code{jobs/slurm/gpu.sh} and \code{jobs/slurm/cpu.sh} (for example
+with \code{nano}) and set the lines marked at their top: \code{--account} (your project code),
+\code{--partition} and, for the GPU job, \code{--gres} (one GPU, type name as on your cluster).
+
+\textbf{Python environment} (once; the job files use \code{ML/env/bin/python}; the name of
+the conda module differs between clusters, see \code{module avail conda}):
+
+\begin{cmd}[Sunbird]
+module load anaconda/2024.06
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda create --prefix /scratch/$USER/ML/env python=3.11 -y \
+             --override-channels -c conda-forge
+conda activate /scratch/$USER/ML/env
+/scratch/$USER/ML/env/bin/python -m pip install --no-cache-dir --only-binary=:all: \
+       numpy matplotlib ngsolve torch
+\end{cmd}
+
+\textbf{Every later login:} \code{cd /scratch/\$USER/ML}. Every \code{sbatch} line must be
+typed in this folder.
+
+\textbf{Check.}
+
+\begin{cmd}[Sunbird]
+sbatch jobs/slurm/gpu.sh gpu-info
+sbatch jobs/slurm/cpu.sh smoke
+\end{cmd}
+
+Watch them live (NUMBER is what \code{sbatch} printed; Section~\ref{sec:watch}):
+
+\begin{cmd}[Sunbird]
+tail -F outputs/slurm/gpu_NUMBER.out
+tail -F outputs/slurm/cpu_NUMBER.out
+\end{cmd}
+ The GPU report must name an A100; the smoke test must end with
+\emph{Smoke test passed} and \code{EXIT CODE: 0}.
+The account, partitions and the 24-hour limit are in the top lines of
+\code{gpu.sh} and \code{cpu.sh}.
+
+% =============================================================================
+\section{Watching jobs and finding results}\label{sec:watch}
+% =============================================================================
+
+\textbf{The output file.} \code{sbatch} answers \code{Submitted batch job 8206449}; 8206449 is
+the job number. Everything the job prints goes into one file:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Sent with & Output file \\
+\midrule
+\code{gpu.sh} & \code{outputs/slurm/gpu_8206449.out} \\
+\code{cpu.sh} & \code{outputs/slurm/cpu_8206449.out} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+It starts with \code{JOB}, \code{NODE}, \code{STARTED} and \code{COMMAND}, and ends with
+\code{FINISHED} and \code{EXIT CODE} (0 means success; otherwise the error is just above).
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Command & Meaning \\
+\midrule
+\code{squeue -u $USER}                        & my jobs: \code{PD} waiting, \code{R} running,
+                                                \code{CG} finishing; not listed = over \\
+\code{tail -F outputs/slurm/cpu_8206449.out}  & the output \textbf{live}, line by line; waits if the
+                                                job has not started. \code{Ctrl+C} stops
+                                                watching, not the job \\
+\code{cat outputs/slurm/cpu_8206449.out}      & the whole output of a finished job \\
+\code{tail -n 30 outputs/slurm/cpu_8206449.out} & its last 30 lines (errors are at the end) \\
+\code{ls -t outputs/slurm | head}             & newest output files first \\
+\code{sacct -j 8206449}                       & \code{COMPLETED}, \code{FAILED}, \code{TIMEOUT} or
+                                                \code{CANCELLED} \\
+\code{scancel 8206449}                        & stop the job \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{Array jobs.} Every array line of this manual adds
+\code{--output=outputs/slurm/gpu_\%A_\%a.out} (stored once as \code{A="..."} and pasted as
+\code{\$A}), so task 3 of array 8206500 (shown by
+\code{squeue} as \code{8206500_3}) writes \code{outputs/slurm/gpu_8206500_3.out}. Its GPU:
+\code{srun --jobid=8206500_3 --overlap nvidia-smi}. A user may hold a limited number of GPUs at
+once; further tasks wait with the reason \code{QOSMaxGRESPerUser} and start automatically.
+
+\textbf{The results} are not in \code{outputs/slurm}. Where each stage writes them
+(\code{TAG} is \code{scaling_3200} for the full study, \code{combined_0500} for the 500-case
+study; \code{RUN} is the run name):
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Stage & Results \\
+\midrule
+\code{gpu-info}         & in the output file; also \code{outputs/study_results/combined_0500/hardware_preflight.json} \\
+\code{smoke}            & output file ends with \emph{Smoke test passed}; files in \code{verification/} \\
+\code{generate}         & \code{data/processed/TAG/protocol_v2/dataset.npz} \\
+\code{generate-rounded} & \code{data/external/TAG/protocol_v2/rounded_rect_external_test/} \\
+\code{plot-sampling}    & \code{outputs/figures/TAG/dataset/} \\
+\code{mesh-check}       & \code{outputs/study_results/combined_0500/mesh_convergence/} \\
+\code{train}, \code{train-final}, \code{train-scaling}
+                        & model \code{outputs/checkpoints/TAG/RUN/best_model.pt};
+                          loss history \code{outputs/logs/TAG/RUN/}; test errors
+                          \code{outputs/study_results/TAG/RUN/} \\
+\code{evaluate-rounded} & \code{outputs/study_results/TAG/RUN/rounded_rect_external_test/} \\
+\code{plot}             & \code{outputs/figures/TAG/RUN/} \\
+\code{benchmark}        & \code{outputs/study_results/TAG/RUN/benchmarks/} \\
+\code{tune-select}      & tables and winner \code{outputs/study_results/TAG/tuning/};
+                          heatmaps \code{outputs/figures/TAG/report/} (scaling: \code{report/N0800/}) \\
+\code{scaling-report}   & \code{outputs/figures/scaling_3200/report/scaling.pdf} (+ \code{.csv}, \code{.json}) \\
+\code{compare}          & \code{outputs/figures/TAG/report/} (scaling: subfolder \code{N0800} etc.) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Jobs keep running after you log out. To look at figures, bring \code{outputs} home
+(end of Section~\ref{sec:sbstudy}).
+
+% =============================================================================
+\section{The study on Sunbird}\label{sec:sbstudy}
+% =============================================================================
+
+The same steps as Section~\ref{sec:order}. Submit one block, wait until \code{squeue -u \$USER}
+is empty, then submit the next. A line ending in \texttt{\textbackslash} continues on the next
+line; copy both together. \code{--array=0-24} starts tasks 0 to 24 at the same time; each task
+trains one model. After every \code{sbatch}, follow it live with
+\code{tail -F outputs/slurm/gpu_NUMBER.out} (or \code{cpu_}); where the results go is in
+Section~\ref{sec:watch}.
+
+\textbf{Steps 1--2: data} (CPU node; 3800 FE solves; if the 24-hour limit ends it, submit again):
+
+\begin{cmd}[Sunbird]
+sbatch jobs/slurm/cpu.sh generate --family scaling
+\end{cmd}
+\begin{cmd}[Sunbird: when it has finished]
+sbatch jobs/slurm/cpu.sh generate-rounded --family scaling --rounded-cases 50
+sbatch jobs/slurm/cpu.sh plot-sampling --family scaling
+sbatch jobs/slurm/cpu.sh mesh-check
+\end{cmd}
+
+\textbf{Step 3: one quick model} (optional):
+
+\begin{cmd}[Sunbird]
+F="--family scaling --operator fno"
+sbatch jobs/slurm/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno --epochs 300
+\end{cmd}
+
+\textbf{Step 4: tuning at $N = 800$.} One array per stage; select when the array has finished.
+
+\begin{cmd}[Sunbird: DeepONet]
+T="--family scaling --train-size 800 --operator deeponet"
+A="--output=outputs/slurm/gpu_%A_%a.out"
+sbatch --array=0-24 $A jobs/slurm/gpu.sh tune $T --stage-name grid --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid
+sbatch --array=0-24 $A jobs/slurm/gpu.sh tune $T --stage-name grid_gelu --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid_gelu
+sbatch --array=0-2 $A jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+\end{cmd}
+
+\begin{cmd}[Sunbird: FNO]
+T="--family scaling --train-size 800 --operator fno"
+A="--output=outputs/slurm/gpu_%A_%a.out"
+sbatch --array=0-11 $A jobs/slurm/gpu.sh tune $T --stage-name modes_width --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name modes_width
+sbatch --array=0-3 $A jobs/slurm/gpu.sh tune $T --stage-name depth --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name depth
+sbatch --array=0-2 $A jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+\end{cmd}
+
+(\code{T="..."} stores the common words; \code{\$T} pastes them back. Set \code{T} again in a new
+login.)
+
+\textbf{Step 5: the data-size runs.} 5 sizes $\times$ 5 seeds = 25 tasks per operator
+(task $k$ is size $k \div 5$, seed $k \bmod 5$):
+
+\begin{cmd}[Sunbird]
+A="--output=outputs/slurm/gpu_%A_%a.out"
+sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator deeponet
+sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator fno
+\end{cmd}
+
+Large training sets may need more than the 24-hour limit. Submit the same lines again: finished
+runs are skipped and interrupted ones continue from their recovery point.
+
+\textbf{Steps 6--8: results.}
+
+\begin{cmd}[Sunbird: when all runs have finished]
+sbatch jobs/slurm/cpu.sh scaling-report
+for n in 200 400 800 1600 3200
+do
+    sbatch jobs/slurm/cpu.sh compare --family scaling --train-size $n
+done
+R="--family scaling --operator fno --run-name scale_fno_N3200_seed321"
+sbatch jobs/slurm/gpu.sh plot $R
+sbatch jobs/slurm/gpu.sh evaluate-rounded $R
+sbatch jobs/slurm/gpu.sh benchmark $R
+\end{cmd}
+
+\textbf{The earlier 500-case study} (Section~\ref{sec:pcfinal}). Generate its dataset, then
+tune with \code{T="--operator deeponet"} and \code{T="--operator fno"} in the arrays above, then
+train the final seeds:
+
+\begin{cmd}[Sunbird]
+sbatch jobs/slurm/cpu.sh generate --cases 500
+\end{cmd}
+\begin{cmd}[Sunbird: when it has finished]
+sbatch jobs/slurm/cpu.sh generate-rounded --rounded-cases 50
+\end{cmd}
+
+\begin{cmd}[Sunbird: after tuning]
+for s in 321 777 2026 31415 27182
+do
+    sbatch jobs/slurm/gpu.sh train-final --operator deeponet --seed $s
+    sbatch jobs/slurm/gpu.sh train-final --operator fno      --seed $s
+done
+\end{cmd}
+
+\begin{cmd}[Sunbird: when the training jobs have finished]
+for s in 321 777 2026 31415 27182
+do
+    sbatch jobs/slurm/gpu.sh evaluate  --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/slurm/gpu.sh evaluate  --operator fno      --run-name final_fno_seed$s
+    sbatch jobs/slurm/gpu.sh benchmark --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/slurm/gpu.sh benchmark --operator fno      --run-name final_fno_seed$s
+done
+\end{cmd}
+
+\begin{cmd}[Sunbird: when those have finished]
+sbatch jobs/slurm/cpu.sh compare
+\end{cmd}
+
+\textbf{Stopping and continuing.} Jobs end at 24 hours. Submit the same \code{tune},
+\code{train-scaling} or \code{generate} line again, or the same \code{train}/\code{train-final}
+line with \code{--resume} at the end.
+
+\textbf{Bringing results home.} In Anaconda Prompt on your computer, in the folder where the
+results should go:
+
+\begin{cmd}[Your computer]
+scp -r USERNAME@LOGIN_NODE:/scratch/USERNAME/ML/outputs .
+\end{cmd}
+
+% =============================================================================
+\part{Reference}
+% =============================================================================
+
+% =============================================================================
+\section{All stages}
+% =============================================================================
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule
+Stage & Sunbird & What it does \\
+\midrule
+\code{generate}         & cpu & FE dataset (\code{--family scaling}: 3800 cases; default: 500) \\
+\code{generate-rounded} & cpu & 50 rounded rectangles for an extra test (\code{--rounded-cases}) \\
+\code{plot-sampling}    & cpu & figure of where the cavities lie \\
+\code{preview}          & cpu & figure of one FE case: geometry, mesh, temperature, SDF \\
+\code{mesh-check}       & cpu & FE accuracy on three meshes and heat balance (table) \\
+\code{train}            & gpu & train one model \\
+\code{evaluate}         & gpu & test errors of a run (\code{--split val} for validation) \\
+\code{evaluate-rounded} & gpu & errors of a run on the rounded rectangles \\
+\code{plot}             & gpu & loss curve and one test case (\code{--test-case N}) \\
+\code{benchmark}        & gpu & training-epoch and prediction times \\
+\code{tune}             & gpu & train the models of a tuning stage \\
+\code{tune-select}      & cpu & pick the winner of a stage, draw its heatmap \\
+\code{train-final}      & gpu & train the selected model with one seed \\
+\code{summarize}        & cpu & mean and spread over the seeds of one operator \\
+\code{compare}          & cpu & DeepONet against FNO: figures and tables \\
+\code{train-scaling}    & gpu & data-size study: train on the first $N$ training cases \\
+\code{scaling-report}   & cpu & data-size study: learning curves and rates $\alpha$ \\
+\code{gpu-info}         & gpu & hardware record \\
+\code{smoke}            & either & every stage on 20 tiny cases (a check) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =============================================================================
+\section{All options}\label{sec:options}
+% =============================================================================
+
+Every option has a default; type it only to change it. ``Full study'' marks the options the
+study of Section~\ref{sec:order} uses.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}llY@{}}
+\toprule
+Option & Default & Meaning \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Which data}} \\
+\code{--family}          & \code{combined} & \code{scaling} (full study), \code{combined} (500-case study),
+                                              \code{circle}, \code{rect} \\
+\code{--cases}           & 500 / 3200      & cases to generate; for \code{scaling}: size of the training pool \\
+\code{--train-size}      & 0 (all)         & use only the first $N$ training cases (full study: 800 for tuning) \\
+\code{--sizes}           & 200,\ldots,3200 & sizes $N$ of \code{train-scaling} and \code{scaling-report} \\
+\code{--val-cases}       & 200             & scaling dataset: validation cases \\
+\code{--test-cases}      & 400             & scaling dataset: test cases \\
+\code{--rounded-cases}   & 50              & rounded rectangles of \code{generate-rounded} \\
+\code{--force}           & off             & make the dataset again although it exists \\
+\code{--small-grid}      & off             & coarse grid and few cases (used by \code{smoke}) \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Which model and how it is trained}} \\
+\code{--operator}        & \code{deeponet} & \code{deeponet} or \code{fno} (full study: both) \\
+\code{--variant}         & \code{baseline} & named architecture of \code{train} (Section~\ref{sec:pcone}) \\
+\code{--epochs}          & 5000            & epoch limit (full study: 2000 for tuning) \\
+\code{--batch-size}      & 8               & cases per optimiser step \\
+\code{--lr}              & 0.001           & initial learning rate (tuning overrides it in stage \code{lr}) \\
+\code{--seed}            & 123             & seed of one run (initial weights, batch order) \\
+\code{--seeds}           & 5 seeds         & 321,777,2026,31415,27182 for \code{train-scaling},
+                                              \code{scaling-report}, \code{summarize}, \code{compare};
+                                              123 for \code{tune} \\
+\code{--run-name}        & automatic       & name of a run; all its files carry it \\
+\code{--device}          & \code{cuda}     & \code{cuda} (GPU) or \code{cpu} \\
+\code{--point-chunk}     & 2048            & DeepONet: grid points per pass (lower if GPU memory runs out;
+                                              results unchanged) \\
+\code{--cpu-threads}     & 4               & processor threads \\
+\code{--checkpoint-every}& 50              & epochs between recovery points \\
+\code{--early-stop}      & 800             & stop after this many epochs without a better validation error \\
+\code{--scheduler-patience} & 200          & halve the learning rate after this many such epochs \\
+\code{--resume}          & off             & continue a stopped \code{train}/\code{train-final} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Evaluation, tuning, timing}} \\
+\code{--split}           & \code{test}     & cases scored by \code{evaluate}: \code{test} or \code{val} \\
+\code{--test-case}       & 0               & case drawn by \code{plot} \\
+\code{--stage-name}      & --              & tuning stage (full study: every stage of Section~\ref{sec:pctune}) \\
+\code{--cell}            & all             & one model of a tuning stage (on Sunbird: the array task) \\
+\code{--benchmark-repeats} & 30            & timed repeats of a prediction \\
+\code{--benchmark-epochs}  & 3             & timed training epochs \\
+\code{--warmups}         & 5               & untimed repeats before timing \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =============================================================================
+\section{Settings fixed in the code}\label{sec:settings}
+% =============================================================================
+
+These have no option on purpose: they define the problem, and changing one makes a new
+dataset. They are all in \code{src/config.py}, each with a comment. To change one, edit the
+number there and generate the data again (\code{--force}).
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}lY@{}}
+\toprule
+Group & Setting (value) \\
+\midrule
+Plate        & $L_x = 36$\,mm, $L_y = 21$\,mm \\
+Physics      & $k = 28.3$\,W/(m\,K), $h = 4000$\,W/(m$^2$\,K), $T_\infty = 300$\,K,
+               $q = 0.5$\,MW/m$^2$ on the top edge; other edges adiabatic \\
+Cavities     & circle diameter 8--14\,mm; rectangle width 8--14\,mm, height 6--12\,mm;
+               rounded corners 0.5--3\,mm (rounded set only) \\
+FE           & H1 elements of order 2, element size $\le 0.8$\,mm \\
+Grid         & $128 \times 96$ points; network input: SDF on this grid \\
+500-case set & Latin hypercube, seed 42; split 80/10/10 per shape, seed 123 \\
+Scaling set  & Halton pool of 3200; validation 200 and test 400 (Latin hypercube);
+               sizes 200, 400, 800, 1600, 3200 \\
+DeepONet     & branch 256--256, trunk 128--128, latent 128, tanh (baseline; tuning replaces depth and width) \\
+FNO          & modes $12 \times 16$, width 32, 4 blocks, padding 8, GELU (baseline; tuning replaces them) \\
+Training     & Adam; learning-rate factor 0.5; gradient clipping 1.0; 32-bit floats; deterministic \\
+Tuning grids & in \code{src/training/tuning.py} (Section~\ref{sec:pctune}) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =============================================================================
+\section{When something goes wrong}
+% =============================================================================
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.38\textwidth}Y@{}}
+\toprule
+The screen says & Remedy \\
+\midrule
+\code{Terms of Service have not been accepted} & create the environment with \code{--override-channels -c conda-forge} (Section~\ref{sec:env}) \\
+\code{EnvironmentNameNotFound: opl}     & the environment was not created; repeat Section~\ref{sec:env} \\
+\code{invalid choice: 'smoke--device'}  & a space is missing: \code{smoke --device cpu} \\
+\code{CUDA is unavailable}              & CPU PyTorch is installed (Section~\ref{sec:env}), or on Sunbird the stage was sent to \code{cpu.sh} \\
+\code{No module named ...}              & \code{conda activate opl} was forgotten, or a package is missing \\
+\code{Run exists}                       & add \code{--resume}, or choose a new \code{--run-name} \\
+\code{has not been selected yet}        & run \code{tune-select} of the previous stage first \\
+\code{Cell not finished}                & some tuning models are still running or failed \\
+\code{Checkpoint and dataset}           & the dataset changed after training; train again \\
+\code{CUDA out of memory}               & add \code{--point-chunk 1024} or \code{--batch-size 4} \\
+\code{Segmentation fault}               & \code{ngsolve} and \code{torch} used in one Python session; keep them apart \\
+an error about \code{outputs/slurm}     & Sunbird: \code{mkdir -p outputs/slurm} in the project folder \\
+\code{Connection timed out} (ssh, scp)  & your computer cannot reach Sunbird: connect to the university VPN first (or work on campus), then repeat \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =============================================================================
+\section{One-page summary}
+% =============================================================================
+
+\begin{cmd}[Your computer (Anaconda Prompt): the full study]
+conda activate opl
+cd /d C:\ML
+
+rem  steps 1-2: data
+python run.py generate --family scaling
+python run.py generate-rounded --family scaling --rounded-cases 50
+python run.py plot-sampling --family scaling
+
+rem  step 4: tuning at N = 800 (then lr; FNO: modes_width, depth, lr)
+set T=--family scaling --train-size 800 --operator deeponet
+python run.py tune        %T% --stage-name grid --epochs 2000
+python run.py tune-select %T% --stage-name grid
+python run.py tune        %T% --stage-name grid_gelu --epochs 2000
+python run.py tune-select %T% --stage-name grid_gelu
+
+rem  step 5: 25 runs per operator
+python run.py train-scaling --operator deeponet
+python run.py train-scaling --operator fno
+
+rem  steps 6-7: results
+python run.py scaling-report
+for %n in (200 400 800 1600 3200) do python run.py compare --family scaling --train-size %n
+\end{cmd}
+
+\begin{cmd}[Sunbird (in the project folder)]
+sbatch jobs/slurm/cpu.sh generate --family scaling
+T="--family scaling --train-size 800 --operator fno"
+A="--output=outputs/slurm/gpu_%A_%a.out"
+sbatch --array=0-11 $A jobs/slurm/gpu.sh tune $T --stage-name modes_width --epochs 2000
+sbatch jobs/slurm/cpu.sh tune-select $T --stage-name modes_width
+sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator fno
+sbatch jobs/slurm/cpu.sh scaling-report
+
+squeue -u $USER
+tail -f outputs/slurm/gpu_123456.out
+scancel 123456
+sacct -j 123456
+\end{cmd}
+
+\end{document}
