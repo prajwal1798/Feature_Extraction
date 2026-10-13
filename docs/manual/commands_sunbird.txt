@@ -1,16 +1,10 @@
 # // ==========================================================================
-# // COMMANDS FOR A SLURM CLUSTER (written on Sunbird, Supercomputing Wales),
-# // IN THE ORDER OF USE
+# // COMMANDS FOR SUNBIRD, IN THE ORDER OF USE
 # //
-# // Log in from your computer first:
-# //     ssh USERNAME@LOGIN_NODE
-# // USERNAME / LOGIN_NODE: your cluster user name and login address.
-# // Before the first job, edit the cluster lines at the top of
-# // jobs/slurm/gpu.sh and jobs/slurm/cpu.sh (account, partition, GPU type).
-# // Paths use /scratch/$USER; if your cluster's work disk is elsewhere,
-# // replace /scratch/$USER by it throughout.
+# // Log in from your computer first (VPN when off campus):
+# //     ssh s.2337862@sunbird.swansea.ac.uk
 # //
-# // EVERYTHING lives in ONE folder:  /scratch/$USER/ML
+# // EVERYTHING lives in ONE folder:  /scratch/s.2337862/ML
 # //     ML/run.py, ML/src, ML/jobs   the code
 # //     ML/env                       the Python environment
 # //     ML/data                      the datasets (made by the code)
@@ -20,8 +14,8 @@
 # // A line ending in \ continues on the next line: copy both together.
 # //
 # // Pattern of every project command:
-# //     sbatch jobs/slurm/gpu.sh  STAGE  --option value ...   (networks, A100)
-# //     sbatch jobs/slurm/cpu.sh  STAGE  --option value ...   (everything else)
+# //     sbatch jobs/sunbird/gpu.sh  STAGE  --option value ...   (networks, A100)
+# //     sbatch jobs/sunbird/cpu.sh  STAGE  --option value ...   (everything else)
 # // The words after gpu.sh / cpu.sh are those you would type after
 # // "python run.py" on your own computer.
 # //
@@ -86,17 +80,20 @@ sacct -j 8206449
 # // 1. GET THE PROJECT AND MAKE THE ENVIRONMENT
 # //
 # // cd /scratch/$USER      : your fast working disk
-# // git clone ... ML       : downloads the project into a folder called ML
-# //                          
+# // git clone ... ML       : downloads the repository into a folder called ML
+# //                          (ML must not exist yet; later "git pull" inside ML
+# //                          fetches updates and leaves data/, outputs/, env/
+# //                          untouched)
 # // mkdir -p outputs/slurm : folder for the job output files (jobs fail without it)
-# // module load / source   : make the "conda" command available (the module
-# //                          name differs between clusters: module avail conda)
+# // module load / source   : make the "conda" command available
 # // conda create --prefix  : Python 3.11 in ML/env (the path the jobs activate)
 # // pip install            : the four packages (on Linux, torch includes CUDA),
 # //                          called through the environment's own Python so they
 # //                          cannot land anywhere else. --only-binary=:all: takes
-# //                          ready-made packages only: some clusters' system compiler
-# //                          is too old to build NumPy from source.
+# //                          ready-made packages only: Sunbird's system compiler
+# //                          (GCC 4.8) is too old to build NumPy from source.
+# // If you copied the folder yourself (WinSCP), skip git clone; "ls" inside
+# // ML must show run.py, src and jobs.
 # // ==========================================================================
 cd /scratch/$USER
 git clone https://github.com/prajwal1798/Feature_Extraction.git ML
@@ -117,8 +114,8 @@ conda activate /scratch/$USER/ML/env
 # // smoke    : every stage on 20 tiny cases; must end with "Smoke test passed"
 # // Every later login: cd /scratch/$USER/ML
 # // ==========================================================================
-sbatch jobs/slurm/gpu.sh gpu-info
-sbatch jobs/slurm/cpu.sh smoke
+sbatch jobs/sunbird/gpu.sh gpu-info
+sbatch jobs/sunbird/cpu.sh smoke
 # // see: gpu-info -> outputs/slurm/gpu_NUMBER.out shows the GPU (A100) in a few
 # //                 seconds; the same record in
 # //                 outputs/study_results/combined_0500/hardware_preflight.json
@@ -141,7 +138,7 @@ sbatch jobs/slurm/cpu.sh smoke
 # // ==========================================================================
 # // 3. DATA  (CPU node; if the 24-hour limit stops it, submit it again)
 # // ==========================================================================
-sbatch jobs/slurm/cpu.sh generate --family scaling
+sbatch jobs/sunbird/cpu.sh generate --family scaling
 # // see: tail -F outputs/slurm/cpu_NUMBER.out  (one line per solved case)
 # //      dataset -> data/processed/scaling_3200/protocol_v2/dataset.npz
 
@@ -149,9 +146,9 @@ sbatch jobs/slurm/cpu.sh generate --family scaling
 # // generate-rounded : 50 rounded rectangles (a shape never trained on)
 # // plot-sampling    : figure of where the cavities lie
 # // mesh-check       : FE accuracy on three meshes + heat balance
-sbatch jobs/slurm/cpu.sh generate-rounded --family scaling --rounded-cases 50
-sbatch jobs/slurm/cpu.sh plot-sampling --family scaling
-sbatch jobs/slurm/cpu.sh mesh-check
+sbatch jobs/sunbird/cpu.sh generate-rounded --family scaling --rounded-cases 50
+sbatch jobs/sunbird/cpu.sh plot-sampling --family scaling
+sbatch jobs/sunbird/cpu.sh mesh-check
 # // see: rounded       -> data/external/scaling_3200/protocol_v2/rounded_rect_external_test/
 # //      plot-sampling -> outputs/figures/scaling_3200/dataset/*.pdf, *.png
 # //      mesh-check    -> outputs/study_results/combined_0500/mesh_convergence/
@@ -162,7 +159,7 @@ sbatch jobs/slurm/cpu.sh mesh-check
 # // F="..." stores the common words; $F pastes them back.
 # // ==========================================================================
 F="--family scaling --operator fno"
-sbatch jobs/slurm/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno --epochs 300
+sbatch jobs/sunbird/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno --epochs 300
 # // see: tail -F outputs/slurm/gpu_NUMBER.out  (one line every 20 epochs:
 # //      training MSE, validation MSE, RMSE in K)
 # //      loss history -> outputs/logs/scaling_3200/try_fno/loss_history.csv
@@ -177,20 +174,20 @@ sbatch jobs/slurm/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno
 # // Set T again after a new login.
 # // ==========================================================================
 T="--family scaling --train-size 800 --operator deeponet"
-sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name grid --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid
-sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name grid_gelu --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid_gelu
-sbatch --array=0-2 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name grid --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name grid
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name grid_gelu --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name grid_gelu
+sbatch --array=0-2 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name lr
 
 T="--family scaling --train-size 800 --operator fno"
-sbatch --array=0-11 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name modes_width --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name modes_width
-sbatch --array=0-3 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name depth --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name depth
-sbatch --array=0-2 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+sbatch --array=0-11 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name modes_width --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name modes_width
+sbatch --array=0-3 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name depth --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name depth
+sbatch --array=0-2 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name lr
 # // see: tune        -> one output file per task (block 0, ARRAY JOBS);
 # //                    squeue shows how many tasks are still running
 # //      tune-select -> cpu_NUMBER.out prints the table and the winner;
@@ -206,8 +203,8 @@ sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
 # // If the 24-hour limit stops large runs, submit the same lines again:
 # // finished runs are skipped, interrupted ones continue.
 # // ==========================================================================
-sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh train-scaling --operator deeponet
-sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh train-scaling --operator fno
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh train-scaling --operator deeponet
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh train-scaling --operator fno
 # // see: one output file per task; its first lines must say
 # //      "Architecture: tuning selection ..." and the chosen layers, activation
 # //      and learning rate. Without a finished "lr" stage the job stops with
@@ -222,10 +219,10 @@ sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh train
 # // compare        : the full DeepONet-FNO report at every N
 # // -> outputs/figures/scaling_3200/report/
 # // ==========================================================================
-sbatch jobs/slurm/cpu.sh scaling-report
+sbatch jobs/sunbird/cpu.sh scaling-report
 for n in 200 400 800 1600 3200
 do
-    sbatch jobs/slurm/cpu.sh compare --family scaling --train-size $n
+    sbatch jobs/sunbird/cpu.sh compare --family scaling --train-size $n
 done
 # // see: scaling-report -> outputs/figures/scaling_3200/report/scaling.pdf,
 # //                       scaling.csv, scaling_rates.json (alpha of each operator)
@@ -235,9 +232,9 @@ done
 # // 8. FIGURES AND TIMINGS OF SINGLE RUNS  (example: N = 3200, seed 321)
 # // ==========================================================================
 R="--family scaling --operator fno --run-name scale_fno_N3200_seed321"
-sbatch jobs/slurm/gpu.sh plot $R
-sbatch jobs/slurm/gpu.sh evaluate-rounded $R
-sbatch jobs/slurm/gpu.sh benchmark $R
+sbatch jobs/sunbird/gpu.sh plot $R
+sbatch jobs/sunbird/gpu.sh evaluate-rounded $R
+sbatch jobs/sunbird/gpu.sh benchmark $R
 # // see: plot      -> outputs/figures/scaling_3200/scale_fno_N3200_seed321/
 # //      rounded   -> outputs/study_results/scaling_3200/scale_.../rounded_rect_external_test/
 # //      benchmark -> outputs/study_results/scaling_3200/scale_.../benchmarks/
@@ -250,10 +247,10 @@ sbatch jobs/slurm/gpu.sh benchmark $R
 # // ==========================================================================
 # // 9. THE 500-CASE DATASET  (same code and seed as before = same 500 cases)
 # // ==========================================================================
-sbatch jobs/slurm/cpu.sh generate --cases 500
+sbatch jobs/sunbird/cpu.sh generate --cases 500
 
 # // when it has finished:
-sbatch jobs/slurm/cpu.sh generate-rounded --rounded-cases 50
+sbatch jobs/sunbird/cpu.sh generate-rounded --rounded-cases 50
 
 # // ==========================================================================
 # // 10. TUNING: block 5 with  T="--operator deeponet"  and  T="--operator fno"
@@ -264,21 +261,21 @@ sbatch jobs/slurm/cpu.sh generate-rounded --rounded-cases 50
 # // ==========================================================================
 for s in 321 777 2026 31415 27182
 do
-    sbatch jobs/slurm/gpu.sh train-final --operator deeponet --seed $s
-    sbatch jobs/slurm/gpu.sh train-final --operator fno      --seed $s
+    sbatch jobs/sunbird/gpu.sh train-final --operator deeponet --seed $s
+    sbatch jobs/sunbird/gpu.sh train-final --operator fno      --seed $s
 done
 
 # // when the training jobs have finished:
 for s in 321 777 2026 31415 27182
 do
-    sbatch jobs/slurm/gpu.sh evaluate  --operator deeponet --run-name final_deeponet_seed$s
-    sbatch jobs/slurm/gpu.sh evaluate  --operator fno      --run-name final_fno_seed$s
-    sbatch jobs/slurm/gpu.sh benchmark --operator deeponet --run-name final_deeponet_seed$s
-    sbatch jobs/slurm/gpu.sh benchmark --operator fno      --run-name final_fno_seed$s
+    sbatch jobs/sunbird/gpu.sh evaluate  --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/sunbird/gpu.sh evaluate  --operator fno      --run-name final_fno_seed$s
+    sbatch jobs/sunbird/gpu.sh benchmark --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/sunbird/gpu.sh benchmark --operator fno      --run-name final_fno_seed$s
 done
 
 # // when those have finished:
-sbatch jobs/slurm/cpu.sh compare
+sbatch jobs/sunbird/cpu.sh compare
 # // see: outputs/figures/combined_0500/report/   (figures and .csv tables)
 
 
@@ -300,4 +297,4 @@ sbatch jobs/slurm/cpu.sh compare
 # // ==========================================================================
 # // 14. BRING THE RESULTS HOME  (type this on YOUR computer, not on Sunbird)
 # // ==========================================================================
-scp -r USERNAME@LOGIN_NODE:/scratch/USERNAME/ML/outputs .
+scp -r s.2337862@sunbird.swansea.ac.uk:/scratch/s.2337862/ML/outputs .

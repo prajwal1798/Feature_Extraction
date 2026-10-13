@@ -1,7 +1,9 @@
 rem // ==========================================================================
 rem // COMMANDS FOR YOUR COMPUTER (Windows tower, NVIDIA GPU), IN THE ORDER OF USE
 rem //
-rem // Type these in "Anaconda Prompt (miniconda3)" from the Start menu.
+rem // Block 0 is typed in the ordinary "Command Prompt" (Start menu: cmd).
+rem // Everything after it is typed in "Anaconda Prompt (miniconda3)"
+rem // (Start menu, appears after block 0).
 rem // Copy one line, or a whole block. Lines starting with "rem" are notes:
 rem // Windows reads them and does nothing, so pasting them is harmless.
 rem //
@@ -11,7 +13,7 @@ rem //     STAGE  = what to do (generate, train, evaluate, plot, ...)
 rem //     --...  = how to do it; every option starts with TWO hyphens and is
 rem //              separated from the next word by ONE space.
 rem //
-rem // PART A  set up the computer (once)                         blocks  1 - 6
+rem // PART A  set up the computer (once)                         blocks  0 - 6
 rem // PART B  THE FULL STUDY, step by step                       blocks  7 - 12
 rem // PART C  the earlier 500-case study                        blocks 13 - 15
 rem // PART D  stopping, results, Sunbird                         blocks 16 - 18
@@ -41,6 +43,46 @@ rem ##########################################################################
 
 
 rem // ==========================================================================
+rem // 0. MINICONDA AND GIT   (type in "Command Prompt", NOT Anaconda Prompt)
+rem //
+rem // Skip a line if that program is already installed:
+rem //     where git      -> prints a path if Git is installed
+rem //     "Anaconda Prompt (miniconda3)" in the Start menu -> Miniconda is there
+rem //
+rem // cd /d %TEMP% : the temporary folder, where the installer is saved
+rem // curl -L -o  : downloads the Miniconda installer
+rem //               (curl is part of Windows 10 and 11)
+rem // start /wait : runs the installer and waits until it has finished
+rem //               (1-3 minutes, nothing is shown):
+rem //   /S                         silent (no questions)
+rem //   /InstallationType=JustMe   for your user only, no administrator rights,
+rem //                              Windows PATH left unchanged
+rem //   /RegisterPython=0          does not become the default Python of Windows
+rem //   /D=%UserProfile%\miniconda3 folder of the installation (must be LAST)
+rem // winget      : installs Git for Windows (git, Git Bash); answer "Y" if
+rem //               asked to accept the source agreements
+rem //
+rem // Afterwards CLOSE this window. From now on open, from the Start menu:
+rem //     Anaconda Prompt (miniconda3)
+rem // Its prompt starts with "(base)". If the Start-menu entry is missing,
+rem // open "Command Prompt" and type the last line of this block: it turns
+rem // that window into the same Anaconda Prompt.
+rem //
+rem // Without curl/winget: download "Miniconda3 Windows 64-bit" from
+rem //   https://www.anaconda.com/download/success   (Miniconda column)
+rem // and run it (choose "Just Me", keep "Create shortcuts", leave "Add to PATH"
+rem // unticked); download Git from https://git-scm.com/download/win and keep
+rem // all default choices.
+rem // ==========================================================================
+cd /d %TEMP%
+curl -L -o Miniconda3.exe https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
+start /wait "" Miniconda3.exe /S /InstallationType=JustMe /RegisterPython=0 /D=%UserProfile%\miniconda3
+winget install --id Git.Git -e --source winget
+
+%UserProfile%\miniconda3\Scripts\activate.bat
+
+
+rem // ==========================================================================
 rem // 1. NVIDIA DRIVER
 rem //
 rem // Shows your graphics card and the newest CUDA version its driver supports
@@ -53,7 +95,7 @@ nvidia-smi
 
 
 rem // ==========================================================================
-rem // 2. PYTHON ENVIRONMENT
+rem // 2. PYTHON ENVIRONMENT   (from here on: Anaconda Prompt (miniconda3))
 rem //
 rem // conda create : makes a separate Python 3.11 called "opl", so this project
 rem //                never disturbs any other Python on the computer.
@@ -66,7 +108,6 @@ rem // conda activate : switch this window into "opl"; the prompt shows (opl).
 rem // pip install    : numpy (arrays), matplotlib (figures),
 rem //                  ngsolve (finite element solver, includes netgen mesher).
 rem // ==========================================================================
-Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile ".\Miniconda3-latest-Windows-x86_64.exe"
 conda create -n opl python=3.11 -y --override-channels -c conda-forge
 conda activate opl
 pip install numpy matplotlib ngsolve
@@ -96,23 +137,27 @@ python -c "import torch; print(torch.cuda.get_device_name(0))"
 
 
 rem // ==========================================================================
-rem // 5. GET AND CHECK THE PROJECT
+rem // 5. GET THE PROJECT AND CHECK IT
 rem //
-rem // Download it ONE of two ways:
-rem //   a) git (Git for Windows, git-scm.com):
-rem //        git clone https://github.com/prajwal1798/Feature_Extraction.git C:\ML
-rem //   b) GitHub page: Code -> Download ZIP; extract it and rename the
-rem //      extracted folder to C:\ML (run.py must be directly inside C:\ML)
-rem //
-rem // cd /d     : go to the project folder (/d also changes the drive letter).
-rem //             Every project command must be typed inside this folder.
+rem // mkdir      : makes the folder C:\PhD (an error "already exists" is fine)
+rem // git clone  : downloads the repository into C:\PhD\Feature_Extraction
+rem //              (only once; later "git pull" inside the folder fetches updates)
+rem //              Without Git: on the GitHub page, Code -> Download ZIP, extract
+rem //              it to C:\PhD and rename "Feature_Extraction-main" to
+rem //              "Feature_Extraction".
+rem // cd /d      : go to the project folder (/d also changes the drive letter).
+rem //              Every project command must be typed inside this folder;
+rem //              "dir" there must show run.py, src, jobs, tests, docs.
 rem // run_all   : numerical self-tests (geometry, solver, split, Halton, models);
 rem //             about one minute; must end with "All tests passed".
 rem // smoke     : runs every stage on 20 tiny cases on the GPU (a few minutes);
 rem //             must end with "Smoke test passed". Its files go to the
 rem //             folder "verification", which can be deleted afterwards.
 rem // ==========================================================================
-cd /d C:\ML
+mkdir C:\PhD
+cd /d C:\PhD
+git clone https://github.com/prajwal1798/Feature_Extraction.git
+cd /d C:\PhD\Feature_Extraction
 python tests\run_all.py
 python run.py smoke
 
@@ -124,7 +169,7 @@ rem // A new window starts in "base" and in your user folder; these two lines
 rem // bring you back into the project environment and folder.
 rem // ==========================================================================
 conda activate opl
-cd /d C:\ML
+cd /d C:\PhD\Feature_Extraction
 
 
 rem ##########################################################################
@@ -283,7 +328,7 @@ rem // mkdir    : creates the same folder here
 rem // scp      : copies; asks for the Sunbird password (nothing shown while
 rem //            typing), then shows a progress bar
 rem // ==========================================================================
-set SUNBIRD=USERNAME@LOGIN_NODE:/scratch/USERNAME/ML
+set SUNBIRD=s.2337862@sunbird.swansea.ac.uk:/scratch/s.2337862/ML
 set DATA=data/processed/combined_0500/protocol_v2
 mkdir data\processed\combined_0500\protocol_v2
 scp %SUNBIRD%/%DATA%/dataset.npz %DATA%/
@@ -352,12 +397,14 @@ explorer outputs
 
 
 rem // ==========================================================================
-rem // 18. THE CLUSTER (SUNBIRD) FROM THIS COMPUTER  (VPN when off campus)
+rem // 18. SUNBIRD FROM THIS COMPUTER  (VPN when off campus)
 rem //
-rem // USERNAME / LOGIN_NODE: your cluster user name and login address
-rem // ssh ...                       : log in (then commands_slurm.txt;
-rem //                                 "exit" logs out)
+rem // ssh ...                       : log in (then commands_sunbird.txt;
+rem //                                 the code is fetched there with git clone,
+rem //                                 block 1; "exit" logs out)
 rem // scp -r ... outputs .          : download all Sunbird results to "here"
+rem //                                 (type it inside C:\PhD\Feature_Extraction)
+rem // ssh and scp are part of Windows 10/11 and work in Anaconda Prompt.
 rem // ==========================================================================
-ssh USERNAME@LOGIN_NODE
-scp -r USERNAME@LOGIN_NODE:/scratch/USERNAME/ML/outputs .
+ssh s.2337862@sunbird.swansea.ac.uk
+scp -r s.2337862@sunbird.swansea.ac.uk:/scratch/s.2337862/ML/outputs .

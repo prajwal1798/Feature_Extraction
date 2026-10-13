@@ -1,8 +1,6 @@
 #!/bin/bash
-# EDIT THE TWO CLUSTER LINES: --account (your project code), --partition
-# (the CPU partition of your cluster). Everything else stays.
 #SBATCH --job-name=cpu
-#SBATCH --account=ACCOUNT
+#SBATCH --account=scw7008
 #SBATCH --partition=compute
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -14,13 +12,9 @@
 # CPU JOB: RUNS ONE run.py COMMAND ON A CPU NODE
 # (data generation, selection of a tuning stage, reports)
 #
-#   sbatch jobs/slurm/cpu.sh  <exactly what you would type after "python run.py">
+#   sbatch jobs/sunbird/cpu.sh  <exactly what you would type after "python run.py">
 #
-#   example:  sbatch jobs/slurm/cpu.sh generate --family scaling
-#
-# Submit from the project folder. The Python used is the environment made
-# in the project folder:  <project>/env/bin/python  (see README.md).
-# Only the lines marked EDIT depend on the cluster.
+#   example:  sbatch jobs/sunbird/cpu.sh generate --cases 500
 # =============================================================================
 
 # =============================================================================
@@ -32,8 +26,13 @@ echo "STARTED  : $(date)"
 echo "COMMAND  : python run.py $*"
 echo
 
+module purge
+module load anaconda/2024.06
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "/scratch/${USER}/ML/env"
+
 # THE PYTHON OF THE PROJECT ENVIRONMENT, CALLED BY ITS FULL PATH
-PY="${SLURM_SUBMIT_DIR}/env/bin/python"
+PY="/scratch/${USER}/ML/env/bin/python"
 echo "PYTHON   : ${PY}"
 "${PY}" -c "import torch; print('TORCH    :', torch.__version__)"
 "${PY}" -c "import ngsolve; print('NGSOLVE  :', ngsolve.__version__)"

@@ -1,9 +1,6 @@
 #!/bin/bash
-# EDIT THE THREE CLUSTER LINES: --account (your project code), --partition
-# (the GPU partition of your cluster) and --gres (one GPU, type name as on
-# your cluster). Everything else stays.
 #SBATCH --job-name=gpu
-#SBATCH --account=ACCOUNT
+#SBATCH --account=scw7008
 #SBATCH --partition=accel_ai
 #SBATCH --gres=gpu:a100:1
 #SBATCH --ntasks=1
@@ -13,15 +10,11 @@
 #SBATCH --output=outputs/slurm/%x_%j.out
 
 # =============================================================================
-# GPU JOB: RUNS ONE run.py COMMAND ON ONE GPU
+# GPU JOB: RUNS ONE run.py COMMAND ON ONE A100
 #
-#   sbatch jobs/slurm/gpu.sh  <exactly what you would type after "python run.py">
+#   sbatch jobs/sunbird/gpu.sh  <exactly what you would type after "python run.py">
 #
-#   example:  sbatch jobs/slurm/gpu.sh train --operator fno --seed 321
-#
-# Submit from the project folder. The Python used is the environment made
-# in the project folder:  <project>/env/bin/python  (see README.md).
-# Only the lines marked EDIT depend on the cluster.
+#   example:  sbatch jobs/sunbird/gpu.sh train --operator fno --seed 321
 # =============================================================================
 
 # =============================================================================
@@ -33,8 +26,13 @@ echo "STARTED  : $(date)"
 echo "COMMAND  : python run.py $*"
 echo
 
+module purge
+module load anaconda/2024.06
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "/scratch/${USER}/ML/env"
+
 # THE PYTHON OF THE PROJECT ENVIRONMENT, CALLED BY ITS FULL PATH
-PY="${SLURM_SUBMIT_DIR}/env/bin/python"
+PY="/scratch/${USER}/ML/env/bin/python"
 echo "PYTHON   : ${PY}"
 "${PY}" -c "import torch; print('TORCH    :', torch.__version__)"
 "${PY}" -c "import ngsolve; print('NGSOLVE  :', ngsolve.__version__)"

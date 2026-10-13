@@ -44,6 +44,14 @@
           xleftmargin=4pt, xrightmargin=4pt, framesep=5pt, aboveskip=6pt, belowskip=6pt,
           title={\footnotesize\sffamily #1}}}{}
 
+% THE SAME BOX WITH A SMALLER FONT, FOR LONG LINES
+\lstnewenvironment{cmdsmall}[1][]{%
+  \lstset{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true,
+          upquote=true, showstringspaces=false, breaklines=false,
+          frame=single, rulecolor=\color{black!60}, backgroundcolor=\color{black!4},
+          xleftmargin=4pt, xrightmargin=4pt, framesep=5pt, aboveskip=6pt, belowskip=6pt,
+          title={\footnotesize\sffamily #1}}}{}
+
 % A FRAMED NOTE
 \newcommand{\note}[1]{\par\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\small #1}}\par}
 
@@ -73,8 +81,8 @@ and a few \emph{options} (how to do it). The same words work on every machine:
 Where & What you type \\
 \midrule
 Your computer      & \code{python run.py  STAGE  OPTIONS} \\
-Sunbird, GPU node  & \code{sbatch jobs/slurm/gpu.sh  STAGE  OPTIONS} \\
-Sunbird, CPU node  & \code{sbatch jobs/slurm/cpu.sh  STAGE  OPTIONS} \\
+Sunbird, GPU node  & \code{sbatch jobs/sunbird/gpu.sh  STAGE  OPTIONS} \\
+Sunbird, CPU node  & \code{sbatch jobs/sunbird/cpu.sh  STAGE  OPTIONS} \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -85,11 +93,11 @@ Example, training an FNO with seed 321:
 python run.py train --operator fno --seed 321
 \end{cmd}
 \begin{cmd}[Sunbird]
-sbatch jobs/slurm/gpu.sh train --operator fno --seed 321
+sbatch jobs/sunbird/gpu.sh train --operator fno --seed 321
 \end{cmd}
 
 \note{\textbf{Copying commands.} Every command of this manual is also in the plain-text files
-\code{docs/manual/commands_windows.txt} and \code{docs/manual/commands_slurm.txt}.
+\code{docs/manual/commands_windows.txt} and \code{docs/manual/commands_sunbird.txt}.
 Open them in Notepad and copy from there: plain text never loses a space.}
 
 \note{\textbf{Spaces matter.} Every word is separated by one space, and every option starts
@@ -236,7 +244,28 @@ nvidia-smi
 \section{Miniconda}\label{sec:conda}
 % =============================================================================
 
-Miniconda gives you Python in separate, clean \emph{environments}.
+Miniconda gives you Python in separate, clean \emph{environments}. Git downloads the project
+from GitHub. Skip what is already installed: \code{where git} prints a path if Git is there,
+and the Start menu lists \emph{Anaconda Prompt (miniconda3)} if Miniconda is there.
+
+\textbf{From the command line.} Open the ordinary \textbf{Command Prompt} (Start menu,
+\code{cmd}; not PowerShell) and type:
+
+\begin{cmdsmall}[Command Prompt]
+cd /d %TEMP%
+curl -L -o Miniconda3.exe https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
+start /wait "" Miniconda3.exe /S /InstallationType=JustMe /RegisterPython=0 /D=%UserProfile%\miniconda3
+winget install --id Git.Git -e --source winget
+\end{cmdsmall}
+
+\texttt{cd /d \%TEMP\%} goes to the temporary folder; \code{curl} downloads the installer;
+\code{start /wait} runs it silently (one to three minutes,
+nothing is shown) for your user only (\code{JustMe}, no administrator rights), without
+changing the Windows \code{PATH} or the default Python, into \texttt{miniconda3} in your user
+folder (\code{/D=} must be the last option). \code{winget} installs Git for Windows; answer
+\code{Y} if it asks to accept the source agreements. Close the window afterwards.
+
+\textbf{By hand}, if \code{curl} or \code{winget} is not available:
 
 \begin{enumerate}
   \item Download \emph{Miniconda3 Windows 64-bit} from
@@ -244,10 +273,20 @@ Miniconda gives you Python in separate, clean \emph{environments}.
         (section \emph{Miniconda Installers}).
   \item Run the installer with these choices:
         \emph{Just Me}; keep the suggested folder
-        (\texttt{miniconda3} in your user folder); leave \emph{Add to PATH} unticked. Finish.
+        (\texttt{miniconda3} in your user folder); keep \emph{Create shortcuts};
+        leave \emph{Add to PATH} unticked. Finish.
+  \item Download Git from \href{https://git-scm.com/download/win}{git-scm.com/download/win} and
+        install it with all default choices.
   \item Open the Start menu and start \textbf{Anaconda Prompt (miniconda3)}.
         Every command in Part~I is typed in this window. Its prompt starts with \code{(base)}.
 \end{enumerate}
+
+If the Start-menu entry is missing, open Command Prompt and type the line below; the window
+then works as Anaconda Prompt:
+
+\begin{cmd}[Command Prompt]
+%UserProfile%\miniconda3\Scripts\activate.bat
+\end{cmd}
 
 % =============================================================================
 \section{Python environment}\label{sec:env}
@@ -301,21 +340,24 @@ The exact command for other cases is on
 \section{The project}\label{sec:project}
 % =============================================================================
 
-Download the project into \texttt{C:\textbackslash ML}, either with git (Git for Windows,
-\code{git-scm.com}):
+Download the repository into \texttt{C:\textbackslash PhD\textbackslash Feature\_Extraction}
+and check it:
 
 \begin{cmd}[Anaconda Prompt]
-git clone https://github.com/prajwal1798/Feature_Extraction.git C:\ML
-\end{cmd}
-
-or from the GitHub page (\emph{Code}, \emph{Download ZIP}): extract it and rename the folder to
-\texttt{C:\textbackslash ML}, so that \code{run.py} lies directly inside it. Then:
-
-\begin{cmd}[Anaconda Prompt]
-cd /d C:\ML
+mkdir C:\PhD
+cd /d C:\PhD
+git clone https://github.com/prajwal1798/Feature_Extraction.git
+cd /d C:\PhD\Feature_Extraction
 python tests\run_all.py
 python run.py smoke
 \end{cmd}
+
+\code{mkdir} may answer that the folder already exists; that is fine. \code{git clone} is needed
+once; later, \code{git pull} inside the folder fetches updates and leaves \code{data} and
+\code{outputs} alone. Without Git: on the GitHub page choose \emph{Code > Download ZIP},
+extract it to \texttt{C:\textbackslash PhD} and rename \texttt{Feature\_Extraction-main} to
+\texttt{Feature\_Extraction}. \code{cd /d} changes folder and drive; every project command is
+typed inside this folder.
 
 \code{run_all.py} checks the numerics (about one minute) and ends with \emph{All tests passed}.
 \code{smoke} runs every stage on 20 tiny cases on your GPU (a few minutes) and ends with
@@ -330,7 +372,7 @@ Open \textbf{Anaconda Prompt (miniconda3)} and type:
 
 \begin{cmd}[Anaconda Prompt]
 conda activate opl
-cd /d C:\ML
+cd /d C:\PhD\Feature_Extraction
 \end{cmd}
 
 Then type the commands of the following sections. To look at results, open the folder in
@@ -559,7 +601,7 @@ or, if it was made on Sunbird, copy it from there (off campus, connect to the un
 first; each \code{scp} asks for your Sunbird password, which is not shown while you type):
 
 \begin{cmd}[Anaconda Prompt]
-set SUNBIRD=USERNAME@LOGIN_NODE:/scratch/USERNAME/ML
+set SUNBIRD=s.2337862@sunbird.swansea.ac.uk:/scratch/s.2337862/ML
 set DATA=data/processed/combined_0500/protocol_v2
 mkdir data\processed\combined_0500\protocol_v2
 scp %SUNBIRD%/%DATA%/dataset.npz %DATA%/
@@ -601,40 +643,35 @@ Do not change other settings when continuing; the code checks them.
 % =============================================================================
 
 The commands are those of Part~I, with \code{python run.py} replaced by
-\code{sbatch jobs/slurm/gpu.sh} (networks) or \code{sbatch jobs/slurm/cpu.sh}
+\code{sbatch jobs/sunbird/gpu.sh} (networks) or \code{sbatch jobs/sunbird/cpu.sh}
 (everything else). Jobs run without you; you only submit and watch.
 
 % =============================================================================
 \section{Set up once}
 % =============================================================================
 
-This part is written for Sunbird (Supercomputing Wales) and works on any Slurm cluster.
-\code{USERNAME} and \code{LOGIN_NODE} stand for your user name and the login address of your
-cluster; if its work disk is not \code{/scratch/\$USER}, use its own path throughout.
-
-\textbf{Log in} from your computer:
+\textbf{Log in.} In Anaconda Prompt on your computer (VPN when off campus):
 
 \begin{cmd}[Your computer]
-ssh USERNAME@LOGIN_NODE
+ssh s.2337862@sunbird.swansea.ac.uk
 \end{cmd}
 
-Everything of the project lives in one folder, \code{/scratch/\$USER/ML}: the code, the Python
-environment (\code{ML/env}), the data (\code{ML/data}) and every result (\code{ML/outputs}).
-Download the project into it:
+You are now on Sunbird. Everything of the project lives in one folder,
+\code{/scratch/s.2337862/ML}: the code, the Python environment (\code{ML/env}), the data
+(\code{ML/data}) and every result (\code{ML/outputs}). \code{git clone} downloads the
+repository into the folder \code{ML} (which must not exist yet):
 
-\begin{cmd}[Cluster]
+\begin{cmd}[Sunbird]
 cd /scratch/$USER
 git clone https://github.com/prajwal1798/Feature_Extraction.git ML
 cd ML
 mkdir -p outputs/slurm
 \end{cmd}
 
-\textbf{The job files.} Open \code{jobs/slurm/gpu.sh} and \code{jobs/slurm/cpu.sh} (for example
-with \code{nano}) and set the lines marked at their top: \code{--account} (your project code),
-\code{--partition} and, for the GPU job, \code{--gres} (one GPU, type name as on your cluster).
+If you copied the folder over yourself instead (WinSCP), check that \code{run.py} is directly inside it:
+\code{ls /scratch/\$USER/ML} must list \code{run.py}, \code{src} and \code{jobs}.
 
-\textbf{Python environment} (once; the job files use \code{ML/env/bin/python}; the name of
-the conda module differs between clusters, see \code{module avail conda}):
+\textbf{Python environment} (once; the job files activate \code{/scratch/\$USER/ML/env}):
 
 \begin{cmd}[Sunbird]
 module load anaconda/2024.06
@@ -652,8 +689,8 @@ typed in this folder.
 \textbf{Check.}
 
 \begin{cmd}[Sunbird]
-sbatch jobs/slurm/gpu.sh gpu-info
-sbatch jobs/slurm/cpu.sh smoke
+sbatch jobs/sunbird/gpu.sh gpu-info
+sbatch jobs/sunbird/cpu.sh smoke
 \end{cmd}
 
 Watch them live (NUMBER is what \code{sbatch} printed; Section~\ref{sec:watch}):
@@ -664,7 +701,7 @@ tail -F outputs/slurm/cpu_NUMBER.out
 \end{cmd}
  The GPU report must name an A100; the smoke test must end with
 \emph{Smoke test passed} and \code{EXIT CODE: 0}.
-The account, partitions and the 24-hour limit are in the top lines of
+The account (\code{scw7008}), partitions and the 24-hour limit are in the top lines of
 \code{gpu.sh} and \code{cpu.sh}.
 
 % =============================================================================
@@ -764,19 +801,19 @@ Section~\ref{sec:watch}.
 \textbf{Steps 1--2: data} (CPU node; 3800 FE solves; if the 24-hour limit ends it, submit again):
 
 \begin{cmd}[Sunbird]
-sbatch jobs/slurm/cpu.sh generate --family scaling
+sbatch jobs/sunbird/cpu.sh generate --family scaling
 \end{cmd}
 \begin{cmd}[Sunbird: when it has finished]
-sbatch jobs/slurm/cpu.sh generate-rounded --family scaling --rounded-cases 50
-sbatch jobs/slurm/cpu.sh plot-sampling --family scaling
-sbatch jobs/slurm/cpu.sh mesh-check
+sbatch jobs/sunbird/cpu.sh generate-rounded --family scaling --rounded-cases 50
+sbatch jobs/sunbird/cpu.sh plot-sampling --family scaling
+sbatch jobs/sunbird/cpu.sh mesh-check
 \end{cmd}
 
 \textbf{Step 3: one quick model} (optional):
 
 \begin{cmd}[Sunbird]
 F="--family scaling --operator fno"
-sbatch jobs/slurm/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno --epochs 300
+sbatch jobs/sunbird/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno --epochs 300
 \end{cmd}
 
 \textbf{Step 4: tuning at $N = 800$.} One array per stage; select when the array has finished.
@@ -784,23 +821,23 @@ sbatch jobs/slurm/gpu.sh train $F --train-size 800 --seed 321 --run-name try_fno
 \begin{cmd}[Sunbird: DeepONet]
 T="--family scaling --train-size 800 --operator deeponet"
 A="--output=outputs/slurm/gpu_%A_%a.out"
-sbatch --array=0-24 $A jobs/slurm/gpu.sh tune $T --stage-name grid --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid
-sbatch --array=0-24 $A jobs/slurm/gpu.sh tune $T --stage-name grid_gelu --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid_gelu
-sbatch --array=0-2 $A jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+sbatch --array=0-24 $A jobs/sunbird/gpu.sh tune $T --stage-name grid --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name grid
+sbatch --array=0-24 $A jobs/sunbird/gpu.sh tune $T --stage-name grid_gelu --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name grid_gelu
+sbatch --array=0-2 $A jobs/sunbird/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name lr
 \end{cmd}
 
 \begin{cmd}[Sunbird: FNO]
 T="--family scaling --train-size 800 --operator fno"
 A="--output=outputs/slurm/gpu_%A_%a.out"
-sbatch --array=0-11 $A jobs/slurm/gpu.sh tune $T --stage-name modes_width --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name modes_width
-sbatch --array=0-3 $A jobs/slurm/gpu.sh tune $T --stage-name depth --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name depth
-sbatch --array=0-2 $A jobs/slurm/gpu.sh tune $T --stage-name lr --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name lr
+sbatch --array=0-11 $A jobs/sunbird/gpu.sh tune $T --stage-name modes_width --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name modes_width
+sbatch --array=0-3 $A jobs/sunbird/gpu.sh tune $T --stage-name depth --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name depth
+sbatch --array=0-2 $A jobs/sunbird/gpu.sh tune $T --stage-name lr --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name lr
 \end{cmd}
 
 (\code{T="..."} stores the common words; \code{\$T} pastes them back. Set \code{T} again in a new
@@ -811,8 +848,8 @@ login.)
 
 \begin{cmd}[Sunbird]
 A="--output=outputs/slurm/gpu_%A_%a.out"
-sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator deeponet
-sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator fno
+sbatch --array=0-24 $A jobs/sunbird/gpu.sh train-scaling --operator deeponet
+sbatch --array=0-24 $A jobs/sunbird/gpu.sh train-scaling --operator fno
 \end{cmd}
 
 Large training sets may need more than the 24-hour limit. Submit the same lines again: finished
@@ -821,15 +858,15 @@ runs are skipped and interrupted ones continue from their recovery point.
 \textbf{Steps 6--8: results.}
 
 \begin{cmd}[Sunbird: when all runs have finished]
-sbatch jobs/slurm/cpu.sh scaling-report
+sbatch jobs/sunbird/cpu.sh scaling-report
 for n in 200 400 800 1600 3200
 do
-    sbatch jobs/slurm/cpu.sh compare --family scaling --train-size $n
+    sbatch jobs/sunbird/cpu.sh compare --family scaling --train-size $n
 done
 R="--family scaling --operator fno --run-name scale_fno_N3200_seed321"
-sbatch jobs/slurm/gpu.sh plot $R
-sbatch jobs/slurm/gpu.sh evaluate-rounded $R
-sbatch jobs/slurm/gpu.sh benchmark $R
+sbatch jobs/sunbird/gpu.sh plot $R
+sbatch jobs/sunbird/gpu.sh evaluate-rounded $R
+sbatch jobs/sunbird/gpu.sh benchmark $R
 \end{cmd}
 
 \textbf{The earlier 500-case study} (Section~\ref{sec:pcfinal}). Generate its dataset, then
@@ -837,32 +874,32 @@ tune with \code{T="--operator deeponet"} and \code{T="--operator fno"} in the ar
 train the final seeds:
 
 \begin{cmd}[Sunbird]
-sbatch jobs/slurm/cpu.sh generate --cases 500
+sbatch jobs/sunbird/cpu.sh generate --cases 500
 \end{cmd}
 \begin{cmd}[Sunbird: when it has finished]
-sbatch jobs/slurm/cpu.sh generate-rounded --rounded-cases 50
+sbatch jobs/sunbird/cpu.sh generate-rounded --rounded-cases 50
 \end{cmd}
 
 \begin{cmd}[Sunbird: after tuning]
 for s in 321 777 2026 31415 27182
 do
-    sbatch jobs/slurm/gpu.sh train-final --operator deeponet --seed $s
-    sbatch jobs/slurm/gpu.sh train-final --operator fno      --seed $s
+    sbatch jobs/sunbird/gpu.sh train-final --operator deeponet --seed $s
+    sbatch jobs/sunbird/gpu.sh train-final --operator fno      --seed $s
 done
 \end{cmd}
 
 \begin{cmd}[Sunbird: when the training jobs have finished]
 for s in 321 777 2026 31415 27182
 do
-    sbatch jobs/slurm/gpu.sh evaluate  --operator deeponet --run-name final_deeponet_seed$s
-    sbatch jobs/slurm/gpu.sh evaluate  --operator fno      --run-name final_fno_seed$s
-    sbatch jobs/slurm/gpu.sh benchmark --operator deeponet --run-name final_deeponet_seed$s
-    sbatch jobs/slurm/gpu.sh benchmark --operator fno      --run-name final_fno_seed$s
+    sbatch jobs/sunbird/gpu.sh evaluate  --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/sunbird/gpu.sh evaluate  --operator fno      --run-name final_fno_seed$s
+    sbatch jobs/sunbird/gpu.sh benchmark --operator deeponet --run-name final_deeponet_seed$s
+    sbatch jobs/sunbird/gpu.sh benchmark --operator fno      --run-name final_fno_seed$s
 done
 \end{cmd}
 
 \begin{cmd}[Sunbird: when those have finished]
-sbatch jobs/slurm/cpu.sh compare
+sbatch jobs/sunbird/cpu.sh compare
 \end{cmd}
 
 \textbf{Stopping and continuing.} Jobs end at 24 hours. Submit the same \code{tune},
@@ -873,7 +910,7 @@ line with \code{--resume} at the end.
 results should go:
 
 \begin{cmd}[Your computer]
-scp -r USERNAME@LOGIN_NODE:/scratch/USERNAME/ML/outputs .
+scp -r s.2337862@sunbird.swansea.ac.uk:/scratch/s.2337862/ML/outputs .
 \end{cmd}
 
 % =============================================================================
@@ -1033,7 +1070,7 @@ an error about \code{outputs/slurm}     & Sunbird: \code{mkdir -p outputs/slurm}
 
 \begin{cmd}[Your computer (Anaconda Prompt): the full study]
 conda activate opl
-cd /d C:\ML
+cd /d C:\PhD\Feature_Extraction
 
 rem  steps 1-2: data
 python run.py generate --family scaling
@@ -1057,13 +1094,13 @@ for %n in (200 400 800 1600 3200) do python run.py compare --family scaling --tr
 \end{cmd}
 
 \begin{cmd}[Sunbird (in the project folder)]
-sbatch jobs/slurm/cpu.sh generate --family scaling
+sbatch jobs/sunbird/cpu.sh generate --family scaling
 T="--family scaling --train-size 800 --operator fno"
 A="--output=outputs/slurm/gpu_%A_%a.out"
-sbatch --array=0-11 $A jobs/slurm/gpu.sh tune $T --stage-name modes_width --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name modes_width
-sbatch --array=0-24 $A jobs/slurm/gpu.sh train-scaling --operator fno
-sbatch jobs/slurm/cpu.sh scaling-report
+sbatch --array=0-11 $A jobs/sunbird/gpu.sh tune $T --stage-name modes_width --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select $T --stage-name modes_width
+sbatch --array=0-24 $A jobs/sunbird/gpu.sh train-scaling --operator fno
+sbatch jobs/sunbird/cpu.sh scaling-report
 
 squeue -u $USER
 tail -f outputs/slurm/gpu_123456.out

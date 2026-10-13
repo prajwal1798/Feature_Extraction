@@ -16,7 +16,7 @@ The repository contains everything needed to:
 3. measure how their test error falls as the number of training cases grows (the data-size study);
 4. produce the comparison figures and tables.
 
-One program, `run.py`, does all of it. It runs on a laptop, on a workstation with an NVIDIA GPU, and on a Slurm cluster.
+One program, `run.py`, does all of it. It runs on a Windows computer (Anaconda Prompt), on Linux or macOS, and on a Slurm cluster (Sunbird, Supercomputing Wales).
 
 ---
 
@@ -54,149 +54,139 @@ Both operators are trained at N = 200, 400, 800, 1600 and 3200, with five seeds 
 
 ## What is in the repository
 
-| Folder | Contents |
-|---|---|
-| `run.py` | the only entry point: `python run.py STAGE OPTIONS` |
-| `src/fem/` | geometry and SDF, mesh, weak form, sampling of one FE case on the grid |
-| `src/data/` | Latin-hypercube and Halton datasets, frozen split, train-only scaling, rounded-rectangle test set |
-| `src/models/` | DeepONet, FNO, named variants |
-| `src/training/` | training loop, checkpoints and resume, tuning stages, data-size runs |
-| `src/analysis/` | error metrics, timing, mesh check, all figures and reports |
-| `src/config.py` | every fixed setting (physics, geometry ranges, grid, defaults), each with a comment |
-| `jobs/slurm/` | `gpu.sh` and `cpu.sh`: one generic Slurm job each |
-| `tests/` | numerical regression tests (`python tests/run_all.py`) |
-| `docs/manual/` | **the step-by-step instructions** (see "Documentation" below) |
-| `archive/` | earlier scripts (POD-DeepONet, depth study, old figures); not used, not runnable as is |
+```
+Feature_Extraction/
+├── run.py                     the only entry point:  python run.py STAGE OPTIONS
+├── requirements.txt           numpy, matplotlib, ngsolve, torch
+├── src/
+│   ├── config.py              every fixed setting (physics, geometry ranges, grid), each with a comment
+│   ├── fem/                   geometry and SDF, mesh, weak form, sampling of one FE case on the grid
+│   ├── data/                  Latin-hypercube and Halton datasets, frozen split, scaling, rounded-rectangle test set
+│   ├── models/                DeepONet, FNO, named variants
+│   ├── training/              training loop, checkpoints and resume, tuning stages, data-size runs
+│   └── analysis/              error metrics, timing, mesh check, all figures and reports
+├── jobs/sunbird/
+│   ├── gpu.sh                 one run.py command on one A100  (sbatch jobs/sunbird/gpu.sh STAGE ...)
+│   └── cpu.sh                 one run.py command on a CPU node
+├── tests/                     numerical regression tests (python tests/run_all.py)
+├── docs/
+│   ├── manual/
+│   │   ├── commands_windows.txt          every command for Windows, in order (Anaconda Prompt)
+│   │   ├── commands_sunbird.txt          every command for Sunbird, in order
+│   │   └── Operator_Learning_Manual.tex  the full manual (pdflatex, twice)
+│   └── figures/               the banner above and the script that draws it
+├── outputs/slurm/             output files of the cluster jobs (empty in the repository)
+└── archive/                   earlier scripts (POD-DeepONet, depth study, old figures); not used
+```
 
-The code creates two more folders:
-- `data/` holds the datasets.
-- `outputs/` holds models, logs, tables and figures.
+The code creates two more folders, `data/` (datasets) and `outputs/` (models, logs, tables, figures). Neither is part of the repository.
 
-Neither is part of the repository.
-
----
-
-## Documentation: three files, one per way of running
-
-| File | For |
-|---|---|
-| `docs/manual/commands_windows.txt` | a **Windows** computer with an NVIDIA GPU (Anaconda Prompt) |
-| `docs/manual/commands_slurm.txt` | a **Slurm cluster** (written on Sunbird, Supercomputing Wales) |
-| `docs/manual/Operator_Learning_Manual.tex` | the full manual, as LaTeX: set-up, every step, every option, troubleshooting. Compile with `pdflatex` twice |
-
-The two command files are written to be run from top to bottom:
-- **Command lines:** every command line can be copied as it is.
-- **Notes:** every note line explains the line below it.
-- **Pasting notes is safe:** notes start with `rem` (Windows) or `#` (Linux), so pasting them does nothing.
-
-On Linux or macOS without a cluster, use the commands of this README. They are the Windows commands with `python run.py ...` unchanged.
+The two command files are meant to be run from top to bottom. Every command line can be copied as it is; the note lines above it explain it. Notes start with `rem` (Windows) or `#` (Linux), so pasting them does nothing.
 
 ---
 
-## 1. Installation
+## 1. Windows (Anaconda Prompt)
 
-You need Python 3.11 and four packages: `numpy`, `matplotlib`, `ngsolve` and `torch` (see `requirements.txt`). A GPU is optional, but training is much faster with one.
+This is the complete route on a Windows 10/11 computer. Blocks 0–6 of `docs/manual/commands_windows.txt` contain the same lines with an explanation of each.
 
-### Linux, macOS, or Ubuntu inside Windows (WSL)
+### 1.1 Install Miniconda and Git (once)
 
-```bash
-# Miniforge, if conda is not installed yet (Linux; macOS installers on the same page)
-curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
-source ~/miniforge3/etc/profile.d/conda.sh
+Open the ordinary **Command Prompt** (Start menu → type `cmd`; not PowerShell) and type:
 
-   # the project, in your home folder (never in the folder the terminal happened to open in)
-   cd ~
-   git clone https://github.com/prajwal1798/Feature_Extraction.git ML
-   cd ~/ML
-   pwd                     # must print /home/<your name>/ML
+```bat
+cd /d %TEMP%
+curl -L -o Miniconda3.exe https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
+start /wait "" Miniconda3.exe /S /InstallationType=JustMe /RegisterPython=0 /D=%UserProfile%\miniconda3
+winget install --id Git.Git -e --source winget
+```
 
-# a separate environment for it
+- The installer runs silently for one to three minutes. It installs for your user only (no administrator rights) and leaves the Windows `PATH` unchanged.
+- Skip a line if the program is already there: `where git` prints a path when Git is installed.
+- By hand instead: install *Miniconda3 Windows 64-bit* from [anaconda.com/download/success](https://www.anaconda.com/download/success) (choose *Just Me*, keep *Create shortcuts*, leave *Add to PATH* unticked) and Git from [git-scm.com/download/win](https://git-scm.com/download/win) (default choices).
+
+Close the window. From now on, open **Anaconda Prompt (miniconda3)** from the Start menu; its prompt starts with `(base)`. If that entry is missing, open Command Prompt and type `%UserProfile%\miniconda3\Scripts\activate.bat`.
+
+### 1.2 Environment, PyTorch and the project (once, in Anaconda Prompt)
+
+```bat
+nvidia-smi
 conda create -n opl python=3.11 -y --override-channels -c conda-forge
 conda activate opl
-python -m pip install -r requirements.txt
+pip install numpy matplotlib ngsolve
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+
+mkdir C:\PhD
+cd /d C:\PhD
+git clone https://github.com/prajwal1798/Feature_Extraction.git
+cd /d C:\PhD\Feature_Extraction
+python tests\run_all.py
+python run.py smoke
 ```
 
-On Linux, `pip install torch` installs the CUDA build. On macOS, use `--device cpu` (see section 2).
+- `nvidia-smi` shows the newest CUDA version the driver supports (top right). Only the driver is needed, not the CUDA Toolkit. Use `cu126` instead of `cu130` if it shows 12.6–12.9.
+- `--override-channels -c conda-forge` avoids the *Terms of Service have not been accepted* error.
+- The `python -c` line must print a version ending in `+cu130` and `True`.
+- `mkdir` may report that `C:\PhD` already exists; that is fine. Any other folder works too.
+- `run_all.py` must end with *All tests passed*, `smoke` with *Smoke test passed*.
+- **No NVIDIA GPU:** use `pip install torch` and add `--device cpu` to every training, tuning, evaluation and plotting command.
 
-### Windows with an NVIDIA GPU
+### 1.3 Every new window
 
-Follow blocks 1–6 of `docs/manual/commands_windows.txt`:
-
-1. Check the NVIDIA driver with `nvidia-smi`. Only the driver is needed, not the CUDA Toolkit.
-2. Install Miniconda.
-3. Create the environment.
-4. Install the CUDA build of PyTorch:
-   ```bat
-   pip install torch --index-url https://download.pytorch.org/whl/cu130
-   ```
-   Use `cu126` if `nvidia-smi` reports CUDA 12.6–12.9.
-5. Check that the GPU is visible.
-
-### Slurm cluster
-
-Follow blocks 0–2 of `docs/manual/commands_slurm.txt`:
-
-1. Clone into `/scratch/$USER/ML`.
-2. Create the environment inside the project folder as `ML/env`.
-3. Edit the cluster lines at the top of `jobs/slurm/gpu.sh` and `jobs/slurm/cpu.sh`: `--account`, `--partition`, and the GPU type.
-
----
-
-## 2. Check the installation
-
-```bash
-python tests/run_all.py          # numerical tests, about one minute: "All tests passed"
-python run.py smoke              # every stage on 20 tiny cases: "Smoke test passed"
+```bat
+conda activate opl
+cd /d C:\PhD\Feature_Extraction
 ```
 
-Its files go to `verification/`, which can be deleted afterwards.
+To fetch later changes of the repository: `git pull` inside that folder. Your `data` and `outputs` folders are not touched.
 
-**Without an NVIDIA GPU:** `run.py` uses the GPU by default (`--device cuda`). On a computer without one, add `--device cpu` to every training, tuning, evaluation and plotting command. Data generation always runs on the CPU.
+### 1.4 The full study (Anaconda Prompt)
 
----
+Each step needs the results of the one before. Every command can be typed again after a stop; finished work is kept.
 
-## 3. The full study, step by step
+```bat
+rem steps 1-2: data (CPU)
+python run.py generate --family scaling
+python run.py generate-rounded --family scaling --rounded-cases 50
+python run.py plot-sampling --family scaling
+python run.py preview
+python run.py mesh-check
 
-Every command is typed in the project folder. Each step needs the results of the one before.
-
-**Step 1–2: data** (CPU; minutes to an hour, depending on the processor; restartable: type it again)
-
-```bash
-python run.py generate --family scaling                          # 3800 FE solves
-python run.py generate-rounded --family scaling --rounded-cases 50  # rounded rectangles, never trained on
-python run.py plot-sampling --family scaling                     # where the cavities lie
-python run.py preview                                            # one case: geometry, mesh, field, SDF
-python run.py mesh-check                                         # FE accuracy on three meshes
-```
-
-**Step 3: one quick model** (optional; checks that training works)
-
-```bash
+rem step 3 (optional): one quick model
 python run.py train    --family scaling --train-size 800 --operator fno --seed 321 --run-name try_fno --epochs 300
 python run.py evaluate --family scaling --operator fno --run-name try_fno
 python run.py plot     --family scaling --operator fno --run-name try_fno
+
+rem step 4: tuning at N = 800 (keep the order)
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name grid --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name grid
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name grid_gelu --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name grid_gelu
+python run.py tune        --family scaling --train-size 800 --operator deeponet --stage-name lr --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator deeponet --stage-name lr
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name modes_width --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name modes_width
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name depth --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name depth
+python run.py tune        --family scaling --train-size 800 --operator fno --stage-name lr --epochs 2000
+python run.py tune-select --family scaling --train-size 800 --operator fno --stage-name lr
+
+rem step 5: the data-size runs (5 sizes x 5 seeds per operator)
+python run.py train-scaling --operator deeponet
+python run.py train-scaling --operator fno
+
+rem steps 6-8: results
+python run.py scaling-report
+for %n in (200 400 800 1600 3200) do python run.py compare --family scaling --train-size %n
+python run.py plot             --family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py evaluate-rounded --family scaling --operator fno --run-name scale_fno_N3200_seed321
+python run.py benchmark        --family scaling --operator fno --run-name scale_fno_N3200_seed321
+explorer outputs
 ```
 
-**Step 4: tuning at N = 800** (validation cases only; each stage starts from the winner of the one before, so keep the order)
+---
 
-```bash
-T="--family scaling --train-size 800"
-
-python run.py tune        $T --operator deeponet --stage-name grid      --epochs 2000
-python run.py tune-select $T --operator deeponet --stage-name grid
-python run.py tune        $T --operator deeponet --stage-name grid_gelu --epochs 2000
-python run.py tune-select $T --operator deeponet --stage-name grid_gelu
-python run.py tune        $T --operator deeponet --stage-name lr        --epochs 2000
-python run.py tune-select $T --operator deeponet --stage-name lr
-
-python run.py tune        $T --operator fno --stage-name modes_width --epochs 2000
-python run.py tune-select $T --operator fno --stage-name modes_width
-python run.py tune        $T --operator fno --stage-name depth       --epochs 2000
-python run.py tune-select $T --operator fno --stage-name depth
-python run.py tune        $T --operator fno --stage-name lr          --epochs 2000
-python run.py tune-select $T --operator fno --stage-name lr
-```
+## 2. Tuning stages
 
 | Operator | Stage | What changes | Models |
 |---|---|---|---|
@@ -207,69 +197,99 @@ python run.py tune-select $T --operator fno --stage-name lr
 | FNO | `depth` | Fourier blocks ∈ {2,3,4,6} | 4 |
 | FNO | `lr` | learning rate ∈ {3e-4, 1e-3, 3e-3} | 3 |
 
-How tuning is run and selected:
 - **Fair comparison:** all models of a stage share the split, the epoch budget, early stopping and the scheduler. `tune-select` refuses to compare models where these differ.
 - **Selection:** the winner has the lowest mean validation relative L2 error. RMSE and R² are reported alongside.
-- **Restartable:** if `tune` stops, type it again. Finished models are skipped.
-
-**Step 5: the data-size runs** (5 sizes × 5 seeds = 25 runs per operator, each scored on the 400 test cases)
-
-```bash
-python run.py train-scaling --operator deeponet
-python run.py train-scaling --operator fno
-```
-
-**Steps 6–8: results**
-
-```bash
-python run.py scaling-report                                   # error against N, fitted alpha
-for n in 200 400 800 1600 3200; do
-    python run.py compare --family scaling --train-size $n     # full DeepONet-FNO report at each N
-done
-R="--family scaling --operator fno --run-name scale_fno_N3200_seed321"
-python run.py plot $R                                          # loss curve and one test case
-python run.py evaluate-rounded $R                              # errors on the rounded rectangles
-python run.py benchmark $R                                     # training and prediction times
-```
-
-The equivalent Windows lines, with `set` and `for %n in (...)`, are in `commands_windows.txt`. The cluster versions of the same steps are in `commands_slurm.txt`.
+- **Order:** each stage starts from the winner of the one before; `train-scaling` stops with an error if the `lr` stage of that operator has not been selected.
 
 ---
 
-## 4. On a Slurm cluster
-
-The words after the job file are those you would type after `python run.py`:
+## 3. Linux, macOS, or Ubuntu inside Windows (WSL)
 
 ```bash
-sbatch jobs/slurm/cpu.sh generate --family scaling                       # CPU node
-sbatch jobs/slurm/gpu.sh train --operator fno --seed 321                 # one GPU
+# Miniforge, if conda is not installed yet (Linux; macOS installers on the same page)
+curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
+source ~/miniforge3/etc/profile.d/conda.sh
+
+# the project, in your home folder
+cd ~
+git clone https://github.com/prajwal1798/Feature_Extraction.git
+cd ~/Feature_Extraction
+
+conda create -n opl python=3.11 -y --override-channels -c conda-forge
+conda activate opl
+python -m pip install -r requirements.txt
+python tests/run_all.py
+python run.py smoke
 ```
 
-A tuning stage or the data-size study runs as a **job array**. Every task trains one model on its own GPU, and all of them run at the same time:
+The study commands are those of section 1.4 with `/` in paths and a bash loop:
 
 ```bash
-T="--family scaling --train-size 800 --operator deeponet"
-sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/slurm/gpu.sh tune $T --stage-name grid --epochs 2000
-sbatch jobs/slurm/cpu.sh tune-select $T --stage-name grid       # when the array has finished
+for n in 200 400 800 1600 3200; do python run.py compare --family scaling --train-size $n; done
 ```
 
-How a task knows which model to train:
+On macOS, add `--device cpu`.
+
+---
+
+## 4. Sunbird (Slurm)
+
+Every command, in order, with notes: `docs/manual/commands_sunbird.txt`. Set-up (once, on the login node):
+
+```bash
+cd /scratch/$USER
+git clone https://github.com/prajwal1798/Feature_Extraction.git ML
+cd ML
+mkdir -p outputs/slurm
+module load anaconda/2024.06
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda create --prefix /scratch/$USER/ML/env python=3.11 -y --override-channels -c conda-forge
+conda activate /scratch/$USER/ML/env
+/scratch/$USER/ML/env/bin/python -m pip install --no-cache-dir --only-binary=:all: numpy matplotlib ngsolve torch
+sbatch jobs/sunbird/gpu.sh gpu-info
+sbatch jobs/sunbird/cpu.sh smoke
+```
+
+The job files expect the project in `/scratch/$USER/ML` and the environment in `/scratch/$USER/ML/env`. Submit every job from inside `ML` (`cd /scratch/$USER/ML`). The words after the job file are those you would type after `python run.py`:
+
+```bash
+sbatch jobs/sunbird/cpu.sh generate --family scaling
+sbatch jobs/sunbird/gpu.sh train --operator fno --seed 321
+```
+
+A tuning stage or the data-size study runs as a **job array**; every task trains one model on its own GPU:
+
+```bash
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh tune --family scaling --train-size 800 --operator deeponet --stage-name grid --epochs 2000
+sbatch jobs/sunbird/cpu.sh tune-select --family scaling --train-size 800 --operator deeponet --stage-name grid
+sbatch --array=0-24 --output=outputs/slurm/gpu_%A_%a.out jobs/sunbird/gpu.sh train-scaling --operator deeponet
+```
+
 - **Tuning:** `run.py` reads `SLURM_ARRAY_TASK_ID` and trains cell k of the stage.
 - **`train-scaling`:** task k trains size k ÷ 5 with seed k mod 5.
-
-Watching jobs:
 
 | Command | Shows |
 |---|---|
 | `squeue -u $USER` | waiting (`PD`) and running (`R`) jobs |
-| `tail -F outputs/slurm/gpu_ARRAY_TASK.out` | one task's output, live |
+| `tail -F outputs/slurm/gpu_ARRAY_TASK.out` | one task's output, live (Ctrl+C stops watching, not the job) |
 | `sacct -j NUMBER` | whether a job `COMPLETED`, `FAILED` or hit `TIMEOUT` |
 
-Each output file starts with the job number, node and command. It ends with the exit code; 0 means success.
+**Other Slurm clusters:** change the `#SBATCH --account`, `--partition` and `--gres` lines at the top of `jobs/sunbird/gpu.sh` and `cpu.sh`, and the `module load` line, to those of your cluster.
 
 ---
 
-## 5. Where the results go
+## 5. Documentation
+
+| File | For |
+|---|---|
+| `docs/manual/commands_windows.txt` | a Windows computer, Anaconda Prompt, blocks 0–18 |
+| `docs/manual/commands_sunbird.txt` | Sunbird, blocks 0–14 |
+| `docs/manual/Operator_Learning_Manual.tex` | the full manual: set-up, every step, every option, troubleshooting. Compile with `pdflatex` twice |
+
+---
+
+## 6. Where the results go
 
 `TAG` is `scaling_3200` for the data-size study, or `combined_0500` for the 500-case Latin-hypercube dataset (the default without `--family`). `RUN` is the run name.
 
@@ -289,7 +309,7 @@ Figures are saved as PDF and 600 dpi PNG. The numbers behind every figure are sa
 
 ---
 
-## 6. Options and settings
+## 7. Options and settings
 
 Every option of `run.py` has a default; type an option only to change it. `python run.py --help` lists them. The manual (section "All options") explains each one.
 
@@ -301,7 +321,7 @@ Stopping and continuing:
 
 ---
 
-## 7. Reproducibility
+## 8. Reproducibility
 
 - **Numerics:** FP32 throughout, TF32 off, deterministic algorithms on. The same seed on the same machine gives the same numbers.
 - **Data checks:** the split, the temperature scaling (from training cases only) and a SHA-256 fingerprint of the dataset are stored with the data. Every checkpoint and tuning table is checked against them.
