@@ -51,6 +51,8 @@ from pathlib import Path, PureWindowsPath
 
 import numpy as np
 
+from ..config import PROJECT_ROOT
+
 
 # =============================================================================
 # SHA-256 FINGERPRINT OF A FILE
@@ -126,10 +128,12 @@ def stratified_indices(labels, train_fraction=0.8, val_fraction=0.1, seed=123):
 # =============================================================================
 # WRITE dataset.npz AND dataset_manifest.json
 #
-# extra : optional dictionary of additional arrays stored in dataset.npz
-#         (e.g. the generation_id from generate_data.py)
+# extra  : optional dictionary of additional arrays stored in dataset.npz
+#          (e.g. the generation_id from data/generate.py)
+# splits : optional (train, val, test) index arrays; default = stratified split
 # =============================================================================
-def finalize_dataset(cfg, sdf, mask, physical_temp, meta, fe_paths, coords, extra=None):
+def finalize_dataset(cfg, sdf, mask, physical_temp, meta, fe_paths, coords, extra=None,
+                     splits=None):
     sdf = np.asarray(sdf, dtype=np.float32)
     mask = np.asarray(mask, dtype=np.float32)
     physical_temp = np.asarray(physical_temp, dtype=np.float32)
@@ -140,11 +144,17 @@ def finalize_dataset(cfg, sdf, mask, physical_temp, meta, fe_paths, coords, extr
     if not np.isfinite(sdf).all() or not np.isfinite(physical_temp[solid]).all():
         raise ValueError("Dataset contains invalid solid temperatures or SDF values")
 
-    # STEP 1: SPLIT
-    shape_codes = meta[:, 0]
-    train, val, test = stratified_indices(
-        shape_codes, cfg.train_fraction, cfg.val_fraction, cfg.split_seed
-    )
+    # STEP 1: SPLIT (stratified 80/10/10, unless the caller fixes the splits,
+    #         as data/scaling.py does for its nested training pool)
+    if splits is None:
+        shape_codes = meta[:, 0]
+        train, val, test = stratified_indices(
+            shape_codes, cfg.train_fraction, cfg.val_fraction, cfg.split_seed
+        )
+    else:
+        train = np.asarray(splits[0], dtype=np.int64)
+        val = np.asarray(splits[1], dtype=np.int64)
+        test = np.asarray(splits[2], dtype=np.int64)
 
     # STEP 2: SCALE FROM TRAINING SOLID POINTS ONLY
     train_temp = physical_temp[train]
@@ -235,7 +245,6 @@ def finalize_dataset(cfg, sdf, mask, physical_temp, meta, fe_paths, coords, extr
 # through finalize_dataset, so they follow the same protocol as new data.
 # =============================================================================
 def find_legacy_fe_file(cfg, stored_path):
-    from .config import PROJECT_ROOT
 
     candidates = []
     candidates.append(PROJECT_ROOT / Path(stored_path))

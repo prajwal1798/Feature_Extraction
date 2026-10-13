@@ -6,6 +6,7 @@
 #     mask[i] : 1 = solid point, 0 = cavity point
 #     temp[i] : scaled temperature (0 in the cavity)
 # and the frozen split train_idx / val_idx / test_idx.
+# With cfg.train_size = N only the first N training cases are used.
 #
 # A batch is the tuple (sdf, mask, temp), each of shape (batch, 12288).
 # How the SDF is turned into each operator's input (branch/trunk for
@@ -68,6 +69,16 @@ def load_bundle(cfg):
 
     for key in ("Nx", "Ny", "Lx", "Ly"):
         setattr(cfg, key, data[key][0].item())
+
+    # DATA-SIZE STUDY: KEEP ONLY THE FIRST train_size TRAINING CASES
+    # (in a scaling dataset the training cases are stored in Halton order,
+    #  so the first N cases are themselves an evenly spread set)
+    if cfg.train_size > 0:
+        n_train = len(data["train_idx"])
+        if cfg.train_size > n_train:
+            raise ValueError("train_size %d exceeds the %d training cases"
+                             % (cfg.train_size, n_train))
+        data["train_idx"] = data["train_idx"][:cfg.train_size]
 
     return data
 

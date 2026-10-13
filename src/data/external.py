@@ -98,13 +98,13 @@ def generate_rounded_rect_test_dataset(cfg):
         )
 
     # TRAINING SCALE AND GRID
-    training_data = np.load(cfg.dataset_path, allow_pickle=True)
-    T_min = float(training_data["T_min"][0])
-    T_max = float(training_data["T_max"][0])
-    cfg.Lx = float(training_data["Lx"][0])
-    cfg.Ly = float(training_data["Ly"][0])
-    cfg.Nx = int(training_data["Nx"][0])
-    cfg.Ny = int(training_data["Ny"][0])
+    with np.load(cfg.dataset_path, allow_pickle=True) as training_data:
+        T_min = float(training_data["T_min"][0])
+        T_max = float(training_data["T_max"][0])
+        cfg.Lx = float(training_data["Lx"][0])
+        cfg.Ly = float(training_data["Ly"][0])
+        cfg.Nx = int(training_data["Nx"][0])
+        cfg.Ny = int(training_data["Ny"][0])
 
     xgrid, ygrid, Xg, Yg, grid_points = make_cartesian_grid(cfg)
 

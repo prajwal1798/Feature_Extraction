@@ -88,9 +88,10 @@ def latin_hypercube_sampling(n_samples, n_dim, seed=42):
 #   D  = D_min + zD (D_max - D_min)
 #   cx, cy chosen so the circle stays at least margin = 1.5 maxh from every
 #   plate edge:   r + margin <= cx <= Lx - r - margin   (same for cy with Ly)
+# The points z come from Latin hypercube sampling here, or from the Halton
+# sequence in data/scaling.py; the mapping is the same.
 # =============================================================================
-def generate_lhs_circle_parameters(cfg, n_samples, seed_offset=0):
-    z = latin_hypercube_sampling(n_samples, 3, seed=cfg.seed + seed_offset)
+def circle_parameters(cfg, z):
     margin = 1.5 * cfg.maxh
 
     params = []
@@ -115,6 +116,11 @@ def generate_lhs_circle_parameters(cfg, n_samples, seed_offset=0):
     return params
 
 
+def generate_lhs_circle_parameters(cfg, n_samples, seed_offset=0):
+    z = latin_hypercube_sampling(n_samples, 3, seed=cfg.seed + seed_offset)
+    return circle_parameters(cfg, z)
+
+
 # =============================================================================
 # RECTANGLE CANDIDATES
 #
@@ -122,8 +128,7 @@ def generate_lhs_circle_parameters(cfg, n_samples, seed_offset=0):
 # NOTE: the edge margin here is a fixed 3 mm, whereas circles use
 #       1.5 maxh = 1.2 mm. Kept as in the original to reproduce the dataset.
 # =============================================================================
-def generate_lhs_rect_parameters(cfg, n_samples, seed_offset=0):
-    z = latin_hypercube_sampling(n_samples, 4, seed=cfg.seed + 1000 + seed_offset)
+def rect_parameters(cfg, z):
     margin = 0.003
 
     params = []
@@ -146,6 +151,11 @@ def generate_lhs_rect_parameters(cfg, n_samples, seed_offset=0):
         params.append((W, H, cx, cy))
 
     return params
+
+
+def generate_lhs_rect_parameters(cfg, n_samples, seed_offset=0):
+    z = latin_hypercube_sampling(n_samples, 4, seed=cfg.seed + 1000 + seed_offset)
+    return rect_parameters(cfg, z)
 
 
 # =============================================================================
