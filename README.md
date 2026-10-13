@@ -105,9 +105,11 @@ curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Min
 bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
 source ~/miniforge3/etc/profile.d/conda.sh
 
-# the project
-git clone https://github.com/prajwal1798/Feature_Extraction.git ML
-cd ML
+   # the project, in your home folder (never in the folder the terminal happened to open in)
+   cd ~
+   git clone https://github.com/prajwal1798/Feature_Extraction.git ML
+   cd ~/ML
+   pwd                     # must print /home/<your name>/ML
 
 # a separate environment for it
 conda create -n opl python=3.11 -y --override-channels -c conda-forge
